@@ -1,13 +1,13 @@
 import { getDaysInMonth } from 'date-fns';
 import * as Haptics from 'expo-haptics';
 import { useEffect, useRef, useState } from 'react';
-import { FlatList, Modal, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
-import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
-import Animated, { FadeIn, SlideInDown, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { FlatList, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { AppText } from '@/components/app-text';
+import { type CloseSheet, Sheet } from '@/components/sheet';
 import { type DayKey, mediumDayLabel, monthName, monthStart, parseDay, shiftMonth, todayKey, yearOf } from '@/lib/dates';
 import { colors, fonts } from '@/theme/tokens';
 
@@ -45,16 +45,17 @@ const toHhmm = (m: number) => `${pad(Math.floor(m / 60) % 24)}:${pad(m % 60)}`;
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export function DateTimeSheet(props: Props) {
+  const { height: winH } = useWindowDimensions();
+  if (!props.visible) return null;
   return (
-    <Modal
-      visible={props.visible}
-      transparent
-      animationType="none"
-      onRequestClose={props.onClose}
-      statusBarTranslucent
-      navigationBarTranslucent>
-      {props.visible && <SheetBody {...props} />}
-    </Modal>
+    <Sheet
+      inline
+      draggable={false}
+      onClosed={props.onClose}
+      label={props.title}
+      style={{ height: Math.min(winH * 0.88, 760), gap: 0 }}>
+      {(close) => <SheetBody {...props} close={close} />}
+    </Sheet>
   );
 }
 
@@ -81,9 +82,7 @@ function buildMonths(selected: DayKey): Month[] {
   return out;
 }
 
-function SheetBody({ title, value, allDay, timeLabel = 'Heure', onDone, onClose }: Props) {
-  const insets = useSafeAreaInsets();
-  const { height: winH } = useWindowDimensions();
+function SheetBody({ title, value, allDay, timeLabel = 'Heure', onDone, close }: Props & { close: CloseSheet }) {
   const today = todayKey();
   const [day, setDay] = useState(value.day);
   const [start, setStart] = useState(toMin(value.start));
@@ -120,16 +119,7 @@ function SheetBody({ title, value, allDay, timeLabel = 'Heure', onDone, onClose 
       : `${toHhmm(start)} → ${toHhmm(end)}${nextDay ? ' (lendemain)' : ''}`;
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <Animated.View entering={FadeIn.duration(200)} style={StyleSheet.absoluteFill}>
-        <Pressable accessibilityLabel="Fermer" onPress={onClose} style={{ flex: 1, backgroundColor: colors.veil }} />
-      </Animated.View>
-
-      <Animated.View
-        entering={SlideInDown.duration(280)}
-        style={[styles.sheet, { height: Math.min(winH * 0.88, 760), paddingBottom: Math.max(insets.bottom, 12) + 12 }]}>
-        <View style={styles.grabber} />
-
+    <View style={{ flex: 1 }}>
         <View style={styles.header}>
           <View style={{ flex: 1, minWidth: 0 }}>
             <AppText variant="caption" color={colors.textTertiary}>
@@ -191,7 +181,7 @@ function SheetBody({ title, value, allDay, timeLabel = 'Heure', onDone, onClose 
           onPress={() => {
             Haptics.selectionAsync();
             onDone({ day, start: toHhmm(start), end: end === null ? null : toHhmm(end) });
-            onClose();
+            close();
           }}
           accessibilityRole="button"
           style={({ pressed }) => [styles.done, pressed && { opacity: 0.85 }]}>
@@ -199,8 +189,7 @@ function SheetBody({ title, value, allDay, timeLabel = 'Heure', onDone, onClose 
             Valider
           </AppText>
         </Pressable>
-      </Animated.View>
-    </GestureHandlerRootView>
+    </View>
   );
 }
 
@@ -336,20 +325,6 @@ function TimeSlider({
 }
 
 const styles = StyleSheet.create({
-  sheet: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingTop: 10,
-    paddingHorizontal: 16,
-    backgroundColor: colors.surfaceRaised,
-    borderTopWidth: 1,
-    borderColor: colors.border,
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-  },
-  grabber: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: '#3A3A40', marginBottom: 10 },
   header: { flexDirection: 'row', alignItems: 'flex-end', gap: 12, paddingHorizontal: 4, paddingBottom: 12 },
   bigDate: { fontFamily: fonts.displayLight, fontSize: 32, lineHeight: 38, letterSpacing: -0.5, color: colors.text },
   todayChip: {

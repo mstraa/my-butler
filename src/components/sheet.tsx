@@ -1,6 +1,6 @@
 import { router, useNavigation } from 'expo-router';
 import { useEffect } from 'react';
-import { BackHandler, Pressable, StyleSheet, View } from 'react-native';
+import { BackHandler, Pressable, type StyleProp, StyleSheet, View, type ViewStyle } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,8 +17,19 @@ export type CloseSheet = (then?: () => void) => void;
  * Feuille qui monte du bas sur un voile (écran « transparentModal ») :
  * montée 280 ms, fermeture 200 ms (voile, retour Android, glisser vers le bas).
  * `children` reçoit `close(then?)` : referme la feuille puis quitte l'écran, ou lance `then`.
+ * `inline` : feuille posée par-dessus l'écran courant (sans route) ; `onClosed` est alors appelé à la fin.
  */
-export function Sheet({ children, label }: { children: (close: CloseSheet) => React.ReactNode; label?: string }) {
+export function Sheet({
+  children, label, inline, onClosed, draggable = true, style,
+}: {
+  children: (close: CloseSheet) => React.ReactNode;
+  label?: string;
+  inline?: boolean;
+  onClosed?: () => void;
+  /** Glisser la feuille vers le bas pour fermer (à couper si elle contient une liste qui défile). */
+  draggable?: boolean;
+  style?: StyleProp<ViewStyle>;
+}) {
   const insets = useSafeAreaInsets();
   const p = useSharedValue(0);
   const drag = useSharedValue(0);
@@ -29,7 +40,7 @@ export function Sheet({ children, label }: { children: (close: CloseSheet) => Re
     p.set(withTiming(1, { duration: 280, easing: ease }));
   }, [p]);
 
-  const close: CloseSheet = (then = () => router.back()) => {
+  const close: CloseSheet = (then = onClosed ?? (() => router.back())) => {
     if (closing.get()) return;
     closing.set(true);
     p.set(
@@ -51,6 +62,7 @@ export function Sheet({ children, label }: { children: (close: CloseSheet) => Re
   });
 
   const pan = Gesture.Pan()
+    .enabled(draggable)
     .activeOffsetY(8)
     .failOffsetX([-16, 16])
     .onUpdate((e) => {
@@ -72,7 +84,7 @@ export function Sheet({ children, label }: { children: (close: CloseSheet) => Re
   }));
 
   return (
-    <View style={{ flex: 1 }}>
+    <View style={inline ? styles.inline : { flex: 1 }}>
       <Animated.View style={[StyleSheet.absoluteFill, veilStyle]}>
         <Pressable accessibilityLabel="Fermer" onPress={() => close()} style={styles.veil} />
       </Animated.View>
@@ -83,7 +95,7 @@ export function Sheet({ children, label }: { children: (close: CloseSheet) => Re
           onLayout={(e) => {
             height.set(e.nativeEvent.layout.height);
           }}
-          style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 12) + 16 }, sheetStyle]}>
+          style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 12) + 16 }, style, sheetStyle]}>
           <View style={styles.grabber} />
           {children(close)}
         </Animated.View>
@@ -94,6 +106,7 @@ export function Sheet({ children, label }: { children: (close: CloseSheet) => Re
 
 const styles = StyleSheet.create({
   veil: { flex: 1, backgroundColor: colors.veil },
+  inline: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 10, elevation: 10 },
   sheet: {
     position: 'absolute',
     left: 0,
