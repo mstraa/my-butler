@@ -67,9 +67,9 @@ export async function createEvent(db: SQLiteDatabase, d: EventDraft) {
                          deadline_at, deadline_label, deadline_state, notes, source, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'app', ?)`,
     d.title.trim(), d.categoryId, d.startsAt, d.allDay ? null : d.endsAt, d.allDay ? 1 : 0,
-    d.location.trim() || null, d.reminderMin, d.recurrence,
+    (d.location ?? '').trim() || null, d.reminderMin, d.recurrence,
     d.deadline?.at ?? null, d.deadline ? d.deadline.label.trim() || null : null, d.deadline ? 'open' : null,
-    d.notes.trim() || null, nowStamp(),
+    (d.notes ?? '').trim() || null, nowStamp(),
   );
   return res.lastInsertRowId;
 }
@@ -88,9 +88,9 @@ export async function updateEvent(db: SQLiteDatabase, id: number, d: EventDraft)
                        notes = ?
       WHERE id = ?`,
     d.title.trim(), d.categoryId, d.startsAt, d.allDay ? null : d.endsAt, d.allDay ? 1 : 0,
-    d.location.trim() || null, d.reminderMin, d.recurrence,
+    (d.location ?? '').trim() || null, d.reminderMin, d.recurrence,
     d.deadline?.at ?? null, d.deadline ? d.deadline.label.trim() || null : null, deadlineState,
-    d.notes.trim() || null, id,
+    (d.notes ?? '').trim() || null, id,
   );
 }
 

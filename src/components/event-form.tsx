@@ -33,7 +33,7 @@ const addMinutes = (s: Stamp, min: number) => {
 
 /** Formulaire « Nouveau rendez-vous » / « Modifier le rendez-vous » (maquette HF-NouveauRdv). */
 export function EventForm({ title, initial, categories, onSave, onDelete, readOnlyNote }: Props) {
-  const [d, setD] = useState<EventDraft>(initial);
+  const [d, setD] = useState<EventDraft>(() => ({ ...initial, notes: initial.notes ?? '', location: initial.location ?? '' }));
   const [sheet, setSheet] = useState<'reminder' | 'repeat' | 'when' | 'deadline' | null>(null);
   const [saving, setSaving] = useState(false);
   const [showErrors, setShowErrors] = useState(false);
