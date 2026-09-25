@@ -1,8 +1,11 @@
+import { addDays, addMonths, addYears, differenceInCalendarDays } from 'date-fns';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import type { IconName } from '@/components/icon';
-import { dayOf, type DayKey, nowStamp, shiftDay, type Stamp, timeOf } from '@/lib/dates';
+import { dayKey, dayOf, type DayKey, nowStamp, parseDay, shiftDay, type Stamp, timeOf } from '@/lib/dates';
 import { categoryColors, colors } from '@/theme/tokens';
+
+export type Recurrence = 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly';
 
 export type AgendaItem = {
   key: string;
@@ -11,10 +14,15 @@ export type AgendaItem = {
   title: string;
   /** '09:30', '≤19:00' ou '' */
   time: string;
+  /** Début réel (rdv) ou échéance (tâche) ; null pour un anniversaire. */
+  start: Stamp | null;
+  end: Stamp | null;
+  allDay: boolean;
   color: string;
   icon: IconName;
   cancelled: boolean;
   done: boolean;
+  location?: string | null;
 };
 
 export type AgendaDay = {
@@ -26,9 +34,12 @@ type EventRow = {
   id: number;
   title: string;
   starts_at: Stamp;
+  ends_at: Stamp | null;
   all_day: number;
   icon: string | null;
+  location: string | null;
   cancelled_at: string | null;
+  recurrence: Recurrence;
   color: string | null;
   cat_icon: string | null;
 };
@@ -45,16 +56,42 @@ type BirthdayRow = { id: number; name: string; month: number; day: number; year:
 
 const asIcon = (v: string | null | undefined, fallback: IconName): IconName => (v as IconName) || fallback;
 
+/**
+ * Dates de début des occurrences d'un rdv répété qui tombent dans [from, to].
+ * Une répétition « tous les mois » un 31 se cale sur le dernier jour des mois courts.
+ */
+export function occurrencesInRange(startDay: DayKey, rule: Recurrence, from: DayKey, to: DayKey): DayKey[] {
+  if (rule === 'none') return startDay >= from && startDay <= to ? [startDay] : [];
+  const start = parseDay(startDay);
+  const out: DayKey[] = [];
+  if (rule === 'daily' || rule === 'weekly') {
+    const step = rule === 'daily' ? 1 : 7;
+    const gap = differenceInCalendarDays(parseDay(from), start);
+    let i = Math.max(0, Math.ceil(gap / step));
+    for (let d = dayKey(addDays(start, i * step)); d <= to; i++, d = dayKey(addDays(start, i * step))) out.push(d);
+    return out;
+  }
+  const add = rule === 'monthly' ? addMonths : addYears;
+  for (let i = 0; i < 2000; i++) {
+    const d = dayKey(add(start, i));
+    if (d > to) break;
+    if (d >= from) out.push(d);
+  }
+  return out;
+}
+
 /** Tous les éléments des jours [from, to] (bornes incluses), groupés par jour. */
 export async function getAgendaDays(db: SQLiteDatabase, from: DayKey, to: DayKey): Promise<AgendaDay[]> {
   const [events, tasks, birthdays] = await Promise.all([
     db.getAllAsync<EventRow>(
-      `SELECT e.id, e.title, e.starts_at, e.all_day, e.icon, e.cancelled_at, c.color, c.icon AS cat_icon
+      `SELECT e.id, e.title, e.starts_at, e.ends_at, e.all_day, e.icon, e.location, e.cancelled_at, e.recurrence,
+              c.color, c.icon AS cat_icon
          FROM events e LEFT JOIN categories c ON c.id = e.category_id
-        WHERE e.starts_at >= ? AND e.starts_at < ?
-          AND (e.cancelled_at IS NULL OR e.cancel_mode = 'keep')
+        WHERE (e.cancelled_at IS NULL OR e.cancel_mode = 'keep')
+          AND ((e.recurrence = 'none' AND e.starts_at >= ? AND e.starts_at < ?)
+            OR (e.recurrence != 'none' AND e.starts_at < ?))
         ORDER BY e.starts_at`,
-      from, shiftDay(to, 1),
+      from, shiftDay(to, 1), shiftDay(to, 1),
     ),
     db.getAllAsync<TaskRow>(
       `SELECT t.id, t.title, t.day, t.due_at, t.state, c.color, c.icon AS cat_icon
@@ -78,24 +115,33 @@ export async function getAgendaDays(db: SQLiteDatabase, from: DayKey, to: DayKey
       d.items.push({
         key: `b${b.id}`, kind: 'birthday', id: b.id,
         title: age ? `Anniv. ${b.name} · ${age} ans` : `Anniv. ${b.name}`,
-        time: '', color: categoryColors.birthday, icon: 'cake', cancelled: false, done: false,
+        time: '', start: null, end: null, allDay: true,
+        color: categoryColors.birthday, icon: 'cake', cancelled: false, done: false,
       });
     }
   }
 
   const timed: { sort: string; day: DayKey; item: AgendaItem }[] = [];
   for (const e of events) {
-    timed.push({
-      sort: e.all_day ? '00:00' : timeOf(e.starts_at),
-      day: dayOf(e.starts_at),
-      item: {
-        key: `e${e.id}`, kind: 'event', id: e.id, title: e.title,
-        time: e.all_day ? '' : timeOf(e.starts_at),
-        color: e.color ?? colors.textTertiary,
-        icon: asIcon(e.icon ?? e.cat_icon, 'calendar'),
-        cancelled: !!e.cancelled_at, done: false,
-      },
-    });
+    const startDay = dayOf(e.starts_at);
+    const startTime = timeOf(e.starts_at);
+    // Durée en jours entre début et fin, pour recaler la fin de chaque occurrence.
+    const spanDays = e.ends_at ? differenceInCalendarDays(parseDay(dayOf(e.ends_at)), parseDay(startDay)) : 0;
+    for (const occ of occurrencesInRange(startDay, e.recurrence, from, to)) {
+      const start = `${occ}T${startTime}`;
+      const end = e.ends_at ? `${shiftDay(occ, spanDays)}T${timeOf(e.ends_at)}` : null;
+      timed.push({
+        sort: e.all_day ? '00:00' : startTime,
+        day: occ,
+        item: {
+          key: `e${e.id}-${occ}`, kind: 'event', id: e.id, title: e.title,
+          time: e.all_day ? '' : startTime, start, end, allDay: !!e.all_day,
+          color: e.color ?? colors.textTertiary,
+          icon: asIcon(e.icon ?? e.cat_icon, 'calendar'),
+          cancelled: !!e.cancelled_at, done: false, location: e.location,
+        },
+      });
+    }
   }
   for (const t of tasks) {
     const sameDayDue = t.due_at && dayOf(t.due_at) === t.day;
@@ -105,6 +151,7 @@ export async function getAgendaDays(db: SQLiteDatabase, from: DayKey, to: DayKey
       item: {
         key: `t${t.id}`, kind: 'task', id: t.id, title: t.title,
         time: sameDayDue ? `≤${timeOf(t.due_at)}` : '',
+        start: t.due_at, end: null, allDay: !sameDayDue,
         color: t.color ?? colors.textTertiary,
         icon: asIcon(t.cat_icon, 'task'),
         cancelled: false, done: t.state === 'done',
@@ -211,7 +258,7 @@ export async function getDayStats(db: SQLiteDatabase, day: DayKey): Promise<DayS
       day,
     ),
   ]);
-  const met = goals.filter((g) => (g.value ?? 0) >= (g.kind === 'bool' ? 1 : g.target ?? 1)).length;
+  const met = goals.filter((g) => isMet(g.kind, g.target, g.value)).length;
   const fruits = goals.find((g) => g.key === 'fruits');
   return {
     wokeAt: sleep?.woke_at ?? null,
@@ -220,6 +267,31 @@ export async function getDayStats(db: SQLiteDatabase, day: DayKey): Promise<DayS
     eliquidMl: liquid?.ml ?? null,
     fruits: fruits ? { value: fruits.value ?? 0, target: fruits.target ?? 0 } : null,
   };
+}
+
+const isMet = (kind: string, target: number | null, value: number | null) =>
+  (value ?? 0) >= (kind === 'bool' ? 1 : target ?? 1);
+
+/** Part des objectifs quotidiens atteints, par jour (0 à 1). Les jours sans objectif valent 0. */
+export async function getGoalRatios(db: SQLiteDatabase, from: DayKey, to: DayKey): Promise<Map<DayKey, number>> {
+  const [goals, entries] = await Promise.all([
+    db.getAllAsync<{ id: number; kind: string; target: number | null }>(
+      "SELECT id, kind, target FROM goals WHERE active = 1 AND period = 'day'",
+    ),
+    db.getAllAsync<{ goal_id: number; day: DayKey; value: number }>(
+      'SELECT goal_id, day, value FROM goal_entries WHERE day BETWEEN ? AND ?', from, to,
+    ),
+  ]);
+  const out = new Map<DayKey, number>();
+  if (goals.length === 0) return out;
+  const byId = new Map(goals.map((g) => [g.id, g]));
+  const met = new Map<DayKey, number>();
+  for (const e of entries) {
+    const g = byId.get(e.goal_id);
+    if (g && isMet(g.kind, g.target, e.value)) met.set(e.day, (met.get(e.day) ?? 0) + 1);
+  }
+  for (const [d, n] of met) out.set(d, n / goals.length);
+  return out;
 }
 
 /* ——— Saisie rapide (feuille « Ajouter ») ——— */
@@ -255,3 +327,4 @@ export async function setWokeAt(db: SQLiteDatabase, day: DayKey, hhmm: string) {
     day, hhmm,
   );
 }
+

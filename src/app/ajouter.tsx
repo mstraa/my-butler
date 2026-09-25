@@ -12,10 +12,10 @@ import { useDbMutation, useDbQuery } from '@/db/use-query';
 import { mediumDayLabel, todayKey } from '@/lib/dates';
 import { categoryColors, colors, fonts, withAlpha } from '@/theme/tokens';
 
-type Tile = { label: string; icon: IconName; color: string };
+type Tile = { label: string; icon: IconName; color: string; href?: '/rdv/nouveau' };
 
 const TILES: Tile[] = [
-  { label: 'Rendez-vous', icon: 'calendar', color: categoryColors.work },
+  { label: 'Rendez-vous', icon: 'calendar', color: categoryColors.work, href: '/rdv/nouveau' },
   { label: 'Tâche', icon: 'task', color: categoryColors.friends },
   { label: 'Dépense', icon: 'wallet', color: categoryColors.groceries },
   { label: 'Objectif', icon: 'target', color: categoryColors.health },
@@ -94,7 +94,7 @@ export default function AddSheet() {
             <Animated.View key={t.label} entering={ZoomIn.delay(180 + i * 45).duration(350)} style={styles.tileWrap}>
               <Pressable
                 accessibilityRole="button"
-                onPress={() => router.replace({ pathname: '/a-venir', params: { titre: t.label } })}
+                onPress={() => (t.href ? router.replace(t.href) : router.replace({ pathname: '/a-venir', params: { titre: t.label } }))}
                 style={({ pressed }) => [styles.tile, pressed && { backgroundColor: '#2A2A2F' }]}>
                 <View style={[styles.tileIcon, { backgroundColor: withAlpha(t.color, 0.13) }]}>
                   <Icon name={t.icon} size={16} color={t.color} />

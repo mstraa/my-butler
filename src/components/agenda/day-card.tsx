@@ -101,7 +101,7 @@ export function DayCard({ day, isToday, open, stats, onToggle, onItemPress }: Pr
   );
 }
 
-function ItemRow({ item, onPress }: { item: AgendaItem; onPress?: (i: AgendaItem) => void }) {
+export function ItemRow({ item, onPress }: { item: AgendaItem; onPress?: (i: AgendaItem) => void }) {
   const muted = item.cancelled || item.done;
   const iconColor = muted ? colors.textFaint : item.color;
   const a11y =
@@ -111,8 +111,8 @@ function ItemRow({ item, onPress }: { item: AgendaItem; onPress?: (i: AgendaItem
   return (
     <Pressable
       onPress={() => onPress?.(item)}
-      disabled={!onPress || item.kind !== 'task'}
-      accessibilityRole={item.kind === 'task' ? 'checkbox' : 'text'}
+      disabled={!onPress || item.kind === 'birthday'}
+      accessibilityRole={item.kind === 'task' ? 'checkbox' : item.kind === 'event' ? 'button' : 'text'}
       accessibilityState={item.kind === 'task' ? { checked: item.done } : undefined}
       accessibilityLabel={a11y}
       style={[styles.row, item.cancelled && styles.rowCancelled]}>

@@ -165,6 +165,10 @@ const MIGRATIONS: string[] = [
     value TEXT
   );
   `,
+  /* v2 — répétition et rappel des rendez-vous */ `
+  ALTER TABLE events ADD COLUMN recurrence TEXT NOT NULL DEFAULT 'none'; -- none | daily | weekly | monthly | yearly
+  ALTER TABLE events ADD COLUMN reminder_min INTEGER;                   -- minutes avant ; NULL = pas de rappel
+  `,
 ];
 
 export async function migrateDbIfNeeded(db: SQLiteDatabase) {

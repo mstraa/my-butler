@@ -28,6 +28,10 @@ export const iconPaths = {
   sun: 'M8 12a4 4 0 1 0 8 0a4 4 0 1 0-8 0M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4',
   clock: 'M3 12a9 9 0 1 0 18 0a9 9 0 1 0-18 0M12 7v5l3 2',
   x: 'M6 6l12 12M18 6L6 18',
+  pin: 'M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11zM10 10a2 2 0 1 0 4 0a2 2 0 1 0-4 0',
+  timer: 'M4 13a8 8 0 1 0 16 0a8 8 0 1 0-16 0M12 9v4l2.5 1.5M9 2h6',
+  info: 'M3 12a9 9 0 1 0 18 0a9 9 0 1 0-18 0M12 8v5M12 16v.5',
+  trash: 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6',
 } as const;
 
 export type IconName = keyof typeof iconPaths;

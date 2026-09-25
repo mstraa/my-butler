@@ -49,6 +49,8 @@ export default function RootLayout() {
             <Stack.Screen name="en-retard" options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="reglages" options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="a-venir" options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="rdv/nouveau" options={{ animation: 'slide_from_bottom' }} />
+            <Stack.Screen name="rdv/[id]" options={{ animation: 'slide_from_bottom' }} />
           </Stack>
         </SQLiteProvider>
       </ThemeProvider>

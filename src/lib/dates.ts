@@ -1,4 +1,4 @@
-import { addDays, format, parse } from 'date-fns';
+import { addDays, addMonths, endOfMonth, format, getISOWeek, parse, startOfWeek } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
 /**
@@ -42,3 +42,45 @@ export function lateSince(due: Stamp, now: Date = new Date()) {
   const d = Math.floor(h / 24);
   return d === 1 ? 'depuis hier' : `il y a ${d} j`;
 }
+
+/* ——— Périodes (vues Jour / Semaine / Mois) ——— */
+
+/** Lundi de la semaine qui contient ce jour. */
+export const weekStart = (k: DayKey) => dayKey(startOfWeek(parseDay(k), { weekStartsOn: 1 }));
+export const isoWeek = (k: DayKey) => getISOWeek(parseDay(k));
+export const monthStart = (k: DayKey) => `${k.slice(0, 8)}01`;
+export const shiftMonth = (k: DayKey, n: number) => dayKey(addMonths(parseDay(k), n));
+
+/** Les 7 jours de la semaine de ce jour, du lundi au dimanche. */
+export const weekDays = (k: DayKey) => Array.from({ length: 7 }, (_, i) => shiftDay(weekStart(k), i));
+
+/** Grille du mois : semaines complètes du lundi au dimanche. */
+export function monthGrid(k: DayKey): DayKey[] {
+  const first = monthStart(k);
+  const last = dayKey(endOfMonth(parseDay(first)));
+  const out: DayKey[] = [];
+  for (let d = weekStart(first); d <= last || out.length % 7 !== 0; d = shiftDay(d, 1)) out.push(d);
+  return out;
+}
+
+/** 'Vendredi 25' */
+export const longDayTitle = (k: DayKey) => cap(format(parseDay(k), 'EEEE d', { locale: fr }));
+/** 'lun.' */
+export const weekdayShort = (k: DayKey) => format(parseDay(k), 'EEE', { locale: fr });
+/** 'sam. 3 oct.' avec l'année si elle diffère de l'année en cours. */
+export function dateFieldLabel(k: DayKey) {
+  const sameYear = k.slice(0, 4) === todayKey().slice(0, 4);
+  return format(parseDay(k), sameYear ? 'EEE d MMM' : 'EEE d MMM yyyy', { locale: fr });
+}
+
+/** '21 – 27 sept.' ou '29 sept. – 5 oct.' */
+export function weekRangeLabel(k: DayKey) {
+  const a = parseDay(weekStart(k));
+  const b = addDays(a, 6);
+  return a.getMonth() === b.getMonth()
+    ? `${format(a, 'd', { locale: fr })} – ${format(b, 'd MMM', { locale: fr })}`
+    : `${format(a, 'd MMM', { locale: fr })} – ${format(b, 'd MMM', { locale: fr })}`;
+}
+
+/** Minutes depuis minuit d'un 'HH:mm'. */
+export const minutesOf = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));

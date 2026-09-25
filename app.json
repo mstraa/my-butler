@@ -12,7 +12,7 @@
       "supportsTablet": false
     },
     "android": {
-      "package": "com.mybutler.app",
+      "package": "com.mypersonnallife.app",
       "adaptiveIcon": {
         "backgroundColor": "#0E0E10",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

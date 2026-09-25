@@ -22,9 +22,13 @@ src/
   app/                 routes (Expo Router)
     (tabs)/            Agenda, Objectifs, Dépenses, Suivi, Envies + barre pilule
     ajouter.tsx        feuille du bouton + (saisie rapide fonctionnelle)
+    rdv/               nouveau rendez-vous, modification
     en-retard.tsx      Fait / Reporter / Abandonner, datés dans l'historique
     reglages.tsx
-  components/          éléments d'interface (carte de jour, barre, texte, icônes)
+  components/
+    agenda/            vues Liste, Jour, Semaine, Mois, balayage (swipe-pager), en-têtes
+    form/              champs de formulaire (texte, sélecteurs, interrupteurs, puces)
+    event-form.tsx     formulaire de rendez-vous
   db/                  SQLite : migrations, données d'exemple, requêtes, hooks
   lib/dates.ts         jours 'YYYY-MM-DD' et instants 'YYYY-MM-DDTHH:mm' en heure locale
   theme/tokens.ts      couleurs, catégories, polices (Outfit + DM Sans)
