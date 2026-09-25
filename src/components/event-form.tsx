@@ -23,6 +23,8 @@ type Props = {
   onSave: (d: EventDraft) => Promise<void>;
   onDelete?: () => Promise<void>;
   readOnlyNote?: string;
+  /** Formulaire intégré dans une feuille (édition depuis le détail) plutôt qu'en écran. */
+  embedded?: { onClose: () => void; onDeleted: () => void };
 };
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -55,7 +57,8 @@ function pickTime(value: Stamp, onPick: (hhmm: string) => void) {
 }
 
 /** Formulaire « Nouveau rendez-vous » / « Modifier le rendez-vous » (maquette HF-NouveauRdv). */
-export function EventForm({ title, initial, categories, onSave, onDelete, readOnlyNote }: Props) {
+export function EventForm({ title, initial, categories, onSave, onDelete, readOnlyNote, embedded }: Props) {
+  const close = () => (embedded ? embedded.onClose() : router.back());
   const [d, setD] = useState<EventDraft>(initial);
   const [sheet, setSheet] = useState<'reminder' | 'repeat' | null>(null);
   const [saving, setSaving] = useState(false);
@@ -79,7 +82,8 @@ export function EventForm({ title, initial, categories, onSave, onDelete, readOn
     try {
       await onSave(d);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.back();
+      setSaving(false);
+      close();
     } catch (e) {
       setSaving(false);
       Alert.alert("Impossible d'enregistrer", e instanceof Error ? e.message : String(e));
@@ -94,7 +98,8 @@ export function EventForm({ title, initial, categories, onSave, onDelete, readOn
         style: 'destructive',
         onPress: async () => {
           await onDelete?.();
-          router.dismissAll(); // le rdv n'existe plus : retour à l'agenda
+          if (embedded) embedded.onDeleted();
+          else router.dismissAll(); // le rdv n'existe plus : retour à l'agenda
         },
       },
     ]);
@@ -110,9 +115,11 @@ export function EventForm({ title, initial, categories, onSave, onDelete, readOn
     });
 
   return (
-    <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: colors.bg }}>
+    <SafeAreaView
+      edges={embedded ? ['bottom'] : ['top', 'bottom']}
+      style={{ flex: 1, backgroundColor: embedded ? colors.surfaceRaised : colors.bg }}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Fermer" style={styles.iconBtn}>
+        <Pressable onPress={close} accessibilityRole="button" accessibilityLabel="Fermer" style={styles.iconBtn}>
           <Icon name="x" />
         </Pressable>
         <AppText variant="display" numberOfLines={1} style={{ flex: 1, fontSize: 24 }}>

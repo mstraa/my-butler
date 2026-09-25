@@ -16,9 +16,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { AppText } from '@/components/app-text';
+import { EventForm } from '@/components/event-form';
 import { DeadlineSection, NoteField } from '@/components/event-parts';
 import { Icon, type IconName } from '@/components/icon';
-import { duplicateEvent, type EventRecord, getCategories, getEvent, restoreEvent } from '@/db/events';
+import { deleteEvent, duplicateEvent, type EventRecord, getCategories, getEvent, restoreEvent, updateEvent } from '@/db/events';
 import { useDbMutation, useDbQuery } from '@/db/use-query';
 import { dayOf } from '@/lib/dates';
 import {
@@ -31,7 +32,8 @@ import { colors, fonts, withAlpha } from '@/theme/tokens';
  * - Aperçu (maquette HF-RdvPreview) : hauteur du contenu, boutons Fermer / Éditer en bas ;
  * - Détail (maquette HF-RdvDetail) : on tire la feuille vers le haut, elle prend tout l'écran ;
  *   Reporter / Dupliquer / Annuler montent du bas.
- * Depuis le détail, tirer encore vers le haut : les boutons sortent par le bas → édition.
+ * Depuis le détail, tirer encore vers le haut : les boutons sortent par le bas et la feuille
+ * se prolonge en édition (même feuille, le formulaire remplace le détail en fondu).
  * Depuis le détail : tirer un peu vers le bas → aperçu ; beaucoup → tout se ferme.
  */
 const ease = Easing.bezier(0.2, 0.8, 0.2, 1);
@@ -50,6 +52,8 @@ export default function EventSheet() {
   const FOOTER_H = 14 + 52 + 10 + 52 + BOTTOM; // Reporter / Dupliquer + Annuler
   const mutate = useDbMutation();
   const [detail, setDetail] = useState(false);
+  const [edit, setEdit] = useState(false);
+  const [editKey, setEditKey] = useState(0);
 
   const { data } = useDbQuery(async (db) => {
     const [event, categories] = await Promise.all([getEvent(db, Number(id)), getCategories(db)]);
@@ -68,11 +72,24 @@ export default function EventSheet() {
   const armed = useSharedValue(false);
   const contentH = useSharedValue(0);
   const viewH = useSharedValue(0);
+  const editP = useSharedValue(0); // 0 = détail, 1 = édition
 
   const goBack = () => router.back();
   const setMode = (d: boolean) => setDetail(d);
   const tick = () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  const openEdit = () => router.push({ pathname: '/rdv/modifier/[id]', params: { id }});
+  const openEdit = () => {
+    setEditKey((k) => k + 1);
+    setEdit(true);
+    editP.set(withTiming(1, { duration: 280, easing: ease }));
+  };
+  const closeEdit = () => {
+    editP.set(
+      withTiming(0, { duration: 240, easing: ease }, (finished) => {
+        if (finished) scheduleOnRN(setEdit, false);
+      }),
+    );
+    pull.set(withTiming(0, { duration: 320, easing: ease })); // les boutons du détail remontent
+  };
 
   const goto = (mode: Mode) => {
     'worklet';
@@ -91,7 +108,8 @@ export default function EventSheet() {
   // Retour d'Android : détail → aperçu → fermé.
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      goto(inDetail.get() ? 'preview' : 'close');
+      if (edit) closeEdit();
+      else goto(inDetail.get() ? 'preview' : 'close');
       return true;
     });
     return () => sub.remove();
@@ -108,6 +126,7 @@ export default function EventSheet() {
 
   const native = Gesture.Native();
   const pan = Gesture.Pan()
+    .enabled(!edit)
     .activeOffsetY([-8, 8])
     .failOffsetX([-16, 16])
     .simultaneousWithExternalGesture(native)
@@ -145,8 +164,10 @@ export default function EventSheet() {
       const wasDetail = inDetail.get();
       if (wasDetail && pull.get() > 0) {
         const go = pull.get() >= PULL_EDIT || e.velocityY < -FLING;
-        if (go) scheduleOnRN(openEdit);
-        pull.set(withTiming(0, { duration: go ? 500 : 220, easing: ease }));
+        if (go) {
+          scheduleOnRN(openEdit);
+          pull.set(withTiming(PULL_EDIT, { duration: 160 })); // les boutons restent sortis
+        } else pull.set(withTiming(0, { duration: 220, easing: ease }));
         ty.set(withTiming(0, { duration: 220, easing: ease }));
         return;
       }
@@ -191,11 +212,20 @@ export default function EventSheet() {
   const hintStyle = useAnimatedStyle(() => {
     const on = armed.get();
     return {
-      opacity: interpolate(pull.get(), [PULL_EDIT * 0.3, PULL_EDIT * 0.8], [0, 1], 'clamp'),
+      opacity: interpolate(pull.get(), [PULL_EDIT * 0.3, PULL_EDIT * 0.8], [0, 1], 'clamp') * (editP.get() > 0 ? 0 : 1),
       transform: [{ scale: withTiming(on ? 1 : 0.92, { duration: 120 }) }],
       backgroundColor: withTiming(on ? colors.text : colors.row, { duration: 120 }),
     };
   });
+  // Détail ↔ édition : le détail monte en s'effaçant, le formulaire arrive d'en dessous.
+  const detailLayerStyle = useAnimatedStyle(() => ({
+    opacity: 1 - editP.get(),
+    transform: [{ translateY: -24 * editP.get() }],
+  }));
+  const editLayerStyle = useAnimatedStyle(() => ({
+    opacity: editP.get(),
+    transform: [{ translateY: 32 * (1 - editP.get()) }],
+  }));
   const hintTextStyle = useAnimatedStyle(() => ({ color: withTiming(armed.get() ? colors.onLight : colors.textSecondary, { duration: 120 }) }));
 
   const e = data?.event;
@@ -208,6 +238,7 @@ export default function EventSheet() {
 
       <GestureDetector gesture={pan}>
         <Animated.View accessibilityViewIsModal style={[styles.sheet, { height: FULL }, sheetStyle]}>
+          <Animated.View style={[{ flex: 1 }, detailLayerStyle]} pointerEvents={edit ? 'none' : 'auto'}>
           <GestureDetector gesture={native}>
             <Animated.ScrollView
               onScroll={onScroll}
@@ -232,6 +263,7 @@ export default function EventSheet() {
               )}
             </Animated.ScrollView>
           </GestureDetector>
+          </Animated.View>
 
           {e && (
             <Animated.View pointerEvents="box-none" style={[styles.anchor, { height: FOOTER_H }, anchorStyle]}>
@@ -249,7 +281,10 @@ export default function EventSheet() {
                 style={[styles.footer, { gap: 10, paddingBottom: BOTTOM }, detailBtnStyle]}>
                 <View style={styles.row}>
                   <Pressable
-                    onPress={() => router.push({ pathname: '/rdv/modifier/[id]', params: { id: String(e.id) } })}
+                    onPress={() => {
+                      pull.set(withTiming(PULL_EDIT, { duration: 180, easing: ease }));
+                      openEdit();
+                    }}
                     accessibilityRole="button"
                     style={[styles.btn, styles.btnGhost, { flex: 1 }]}>
                     <Icon name="arrowRight" size={16} color="#D4D4D8" />
@@ -294,6 +329,29 @@ export default function EventSheet() {
                   </Pressable>
                 )}
               </Animated.View>
+            </Animated.View>
+          )}
+
+          {/* Édition : prolongement de la feuille. */}
+          {e && edit && (
+            <Animated.View style={[StyleSheet.absoluteFill, { paddingTop: 10 }, editLayerStyle]}>
+              <View style={styles.grabber} />
+              <EventForm
+                key={editKey}
+                embedded={{ onClose: closeEdit, onDeleted: () => router.back() }}
+                title="Modifier"
+                categories={data!.categories}
+                initial={e}
+                readOnlyNote={
+                  e.recurrence !== 'none' ? 'Rendez-vous répété : les changements s’appliquent à toutes les occurrences.' : undefined
+                }
+                onSave={async (draft) => {
+                  await mutate((db) => updateEvent(db, e.id, draft));
+                }}
+                onDelete={async () => {
+                  await mutate((db) => deleteEvent(db, e.id));
+                }}
+              />
             </Animated.View>
           )}
         </Animated.View>
