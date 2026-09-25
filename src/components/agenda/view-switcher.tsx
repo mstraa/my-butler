@@ -5,6 +5,9 @@ import { colors, fonts } from '@/theme/tokens';
 
 export type AgendaView = 'liste' | 'jour' | 'semaine' | 'mois';
 
+/** Hauteur du sélecteur (pilule 36 + marges internes + bordure). */
+export const SWITCHER_H = 36 + 8 + 2;
+
 const OPTIONS: { key: AgendaView; label: string }[] = [
   { key: 'liste', label: 'Liste' },
   { key: 'jour', label: 'Jour' },
@@ -12,7 +15,7 @@ const OPTIONS: { key: AgendaView; label: string }[] = [
   { key: 'mois', label: 'Mois' },
 ];
 
-/** Sélecteur Liste / Jour / Semaine / Mois, sous l'en-tête des vues de l'agenda. */
+/** Sélecteur Liste / Jour / Semaine / Mois, posé en bas de l'écran au-dessus de la barre d'onglets. */
 export function ViewSwitcher({ value, onChange }: { value: AgendaView; onChange: (v: AgendaView) => void }) {
   return (
     <View style={styles.wrap} accessibilityRole="tablist">
@@ -42,7 +45,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 4,
     marginHorizontal: 16,
-    marginBottom: 12,
     padding: 4,
     backgroundColor: colors.segmented,
     borderWidth: 1,

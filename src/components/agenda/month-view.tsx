@@ -24,7 +24,6 @@ type Props = {
   onSelect: (day: string) => void;
   onOpenDay: (day: string) => void;
   onToday: () => void;
-  switcher: React.ReactNode;
 };
 
 const LETTERS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
@@ -33,7 +32,7 @@ const CELL = 50;
 const gridHeight = (month: string) => 8 + 26 + (monthGrid(month).length / 7) * CELL + 6 + 2;
 
 /** Vue Mois : la grille suit le doigt d'un mois à l'autre ; résumé du jour choisi dessous. */
-export function MonthView({ focus, onShift, onSelect, onOpenDay, onToday, switcher }: Props) {
+export function MonthView({ focus, onShift, onSelect, onOpenDay, onToday }: Props) {
   const today = todayKey();
   const carousel = useRef<CarouselHandle>(null);
   const onItemPress = useItemPress();
@@ -67,7 +66,6 @@ export function MonthView({ focus, onShift, onSelect, onOpenDay, onToday, switch
         onShift={(dir) => carousel.current?.slide(dir)}
         onToday={monthStart(today) === monthStart(focus) ? undefined : onToday}
       />
-      {switcher}
 
       <View style={{ flex: 1 }}>
         <PeriodCarousel

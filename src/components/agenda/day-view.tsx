@@ -33,11 +33,10 @@ type Props = {
   onShiftWeek: (dir: -1 | 1) => void;
   onPickDay: (day: string) => void;
   onToday: () => void;
-  switcher: React.ReactNode;
 };
 
 /** Vue Jour : bande de la semaine + timeline du jour sur une feuille blanche. */
-export function DayView({ focus, direction, onShift, onShiftWeek, onPickDay, onToday, switcher }: Props) {
+export function DayView({ focus, direction, onShift, onShiftWeek, onPickDay, onToday }: Props) {
   const today = todayKey();
   const now = useNow();
   const onItemPress = useItemPress();
@@ -72,7 +71,6 @@ export function DayView({ focus, direction, onShift, onShiftWeek, onPickDay, onT
         onShift={onShift}
         onToday={focus !== today ? onToday : undefined}
       />
-      {switcher}
 
       {/* Bande des jours : elle suit le doigt d'une semaine à l'autre. */}
       <View style={{ height: STRIP_HEIGHT }}>

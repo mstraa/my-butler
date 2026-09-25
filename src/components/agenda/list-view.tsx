@@ -12,7 +12,8 @@ import { Icon } from '@/components/icon';
 import { type AgendaDay, getAgendaDays, getDayStats, getLateItems } from '@/db/agenda';
 import { useDbQuery } from '@/db/use-query';
 import { monthName, shiftDay, todayKey, yearOf } from '@/lib/dates';
-import { colors, fonts, TAB_BAR_CLEARANCE } from '@/theme/tokens';
+import { useTabBarSpace } from '@/components/tab-bar';
+import { colors, fonts } from '@/theme/tokens';
 
 /*
  * Vue Liste :
@@ -37,7 +38,8 @@ const openedDays = new Set<string>();
 const closedDays = new Set<string>(); // pour aujourd'hui, ouvert par défaut
 let listShown = false;
 
-export function ListView({ switcher }: { switcher: React.ReactNode }) {
+export function ListView() {
+  const bottomSpace = useTabBarSpace();
   const today = todayKey();
   const list = useRef<FlatList<AgendaDay>>(null);
   const [range, setRange] = useState({ from: shiftDay(today, -LOAD_BEFORE), to: shiftDay(today, LOAD_AFTER) });
@@ -158,7 +160,6 @@ export function ListView({ switcher }: { switcher: React.ReactNode }) {
         </Link>
       </View>
 
-      {switcher}
 
       {lateCount > 0 && (
         <Animated.View entering={animateIn ? FadeInDown.duration(300) : undefined} style={{ paddingHorizontal: 12 }}>
@@ -194,7 +195,7 @@ export function ListView({ switcher }: { switcher: React.ReactNode }) {
           onEndReached={() => setRange((r) => ({ ...r, to: shiftDay(r.to, CHUNK) }))}
           onEndReachedThreshold={3}
           windowSize={9}
-          contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: TAB_BAR_CLEARANCE }}
+          contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: bottomSpace }}
           renderItem={({ item, index }) => {
             const open = isOpen(item.day);
             return (

@@ -1,7 +1,7 @@
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import type { TabTriggerSlotProps } from 'expo-router/ui';
-import type { Ref } from 'react';
+import { createContext, type Ref, use } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -39,8 +39,14 @@ export function TabIconButton({ icon, label, isFocused, onPress, ...props }: Tab
  */
 export function useTabBarSpace() {
   const insets = useSafeAreaInsets();
-  return Math.max(insets.bottom, 12) + 8 + 60 + 16;
+  return tabBarTop(insets.bottom) + 16 + use(BottomExtraContext);
 }
+
+/** Hauteur, depuis le bas de l'écran, du haut de la barre flottante. */
+export const tabBarTop = (insetBottom: number) => Math.max(insetBottom, 12) + 8 + 60;
+
+/** Place en plus occupée au-dessus de la barre (ex. le sélecteur de vue de l'agenda). */
+export const BottomExtraContext = createContext(0);
 
 /** Conteneur flottant : pilule d'onglets à gauche, bouton + à droite. */
 export function FloatingTabBar({ children }: { children: React.ReactNode }) {

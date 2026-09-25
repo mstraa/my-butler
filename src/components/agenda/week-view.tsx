@@ -23,7 +23,6 @@ type Props = {
   onShift: (dir: -1 | 1) => void;
   onPickDay: (day: string) => void;
   onToday: () => void;
-  switcher: React.ReactNode;
 };
 
 const HOUR = 34; // hauteur d'une heure dans la grille
@@ -39,7 +38,7 @@ const CARD_H = HEAD_H + 1 + GRID_H + 2;
 type Block = { item: AgendaItem; top: number; height: number; lane: number; lanes: number };
 
 /** Vue Semaine : grille horaire des 7 jours, qui suit le doigt d'une semaine à l'autre. */
-export function WeekView({ focus, onShift, onPickDay, onToday, switcher }: Props) {
+export function WeekView({ focus, onShift, onPickDay, onToday }: Props) {
   const today = todayKey();
   const carousel = useRef<CarouselHandle>(null);
   const days = weekDays(focus);
@@ -54,7 +53,6 @@ export function WeekView({ focus, onShift, onPickDay, onToday, switcher }: Props
         onShift={(dir) => carousel.current?.slide(dir)}
         onToday={days.includes(today) ? undefined : onToday}
       />
-      {switcher}
 
       <View style={{ height: CARD_H }}>
         <PeriodCarousel
