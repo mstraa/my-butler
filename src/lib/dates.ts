@@ -31,6 +31,8 @@ export const shortDayLabel = (k: DayKey) => format(parseDay(k), 'EEE d', { local
 export const mediumDayLabel = (k: DayKey) => format(parseDay(k), 'EEE d MMM', { locale: fr });
 /** Les 3 premières lettres du mois, avec majuscule : 'Sep', 'Oct', 'Déc'. */
 export const monthAbbr = (k: DayKey) => cap(format(parseDay(k), 'MMMM', { locale: fr }).slice(0, 3));
+/** Les 3 premières lettres du jour, avec majuscule : 'Lun', 'Ven'. */
+export const weekdayAbbr = (k: DayKey) => cap(format(parseDay(k), 'EEEE', { locale: fr }).slice(0, 3));
 /** 'Septembre' */
 export const monthName = (k: DayKey) => cap(format(parseDay(k), 'MMMM', { locale: fr }));
 export const yearOf = (k: DayKey) => k.slice(0, 4);
