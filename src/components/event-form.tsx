@@ -23,8 +23,6 @@ type Props = {
   onSave: (d: EventDraft) => Promise<void>;
   onDelete?: () => Promise<void>;
   readOnlyNote?: string;
-  /** Formulaire intégré dans une feuille (édition depuis le détail) plutôt qu'en écran. */
-  embedded?: { onClose: () => void; onDeleted: () => void };
 };
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -57,8 +55,7 @@ function pickTime(value: Stamp, onPick: (hhmm: string) => void) {
 }
 
 /** Formulaire « Nouveau rendez-vous » / « Modifier le rendez-vous » (maquette HF-NouveauRdv). */
-export function EventForm({ title, initial, categories, onSave, onDelete, readOnlyNote, embedded }: Props) {
-  const close = () => (embedded ? embedded.onClose() : router.back());
+export function EventForm({ title, initial, categories, onSave, onDelete, readOnlyNote }: Props) {
   const [d, setD] = useState<EventDraft>(initial);
   const [sheet, setSheet] = useState<'reminder' | 'repeat' | null>(null);
   const [saving, setSaving] = useState(false);
@@ -82,8 +79,7 @@ export function EventForm({ title, initial, categories, onSave, onDelete, readOn
     try {
       await onSave(d);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setSaving(false);
-      close();
+      router.back();
     } catch (e) {
       setSaving(false);
       Alert.alert("Impossible d'enregistrer", e instanceof Error ? e.message : String(e));
@@ -98,8 +94,7 @@ export function EventForm({ title, initial, categories, onSave, onDelete, readOn
         style: 'destructive',
         onPress: async () => {
           await onDelete?.();
-          if (embedded) embedded.onDeleted();
-          else router.dismissAll(); // le rdv n'existe plus : retour à l'agenda
+          router.dismissAll(); // le rdv n'existe plus : retour à l'agenda
         },
       },
     ]);
@@ -115,11 +110,9 @@ export function EventForm({ title, initial, categories, onSave, onDelete, readOn
     });
 
   return (
-    <SafeAreaView
-      edges={embedded ? ['bottom'] : ['top', 'bottom']}
-      style={{ flex: 1, backgroundColor: embedded ? colors.surfaceRaised : colors.bg }}>
+    <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: colors.bg }}>
       <View style={styles.header}>
-        <Pressable onPress={close} accessibilityRole="button" accessibilityLabel="Fermer" style={styles.iconBtn}>
+        <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Fermer" style={styles.iconBtn}>
           <Icon name="x" />
         </Pressable>
         <AppText variant="display" numberOfLines={1} style={{ flex: 1, fontSize: 24 }}>
@@ -289,16 +282,14 @@ export function EventForm({ title, initial, categories, onSave, onDelete, readOn
             )}
           </Animated.View>
 
-          {(!embedded || readOnlyNote) && (
-            <View style={styles.note}>
-              <Icon name="info" size={16} color={colors.textTertiary} />
-              <AppText variant="caption" color={colors.textSecondary} style={{ flex: 1 }}>
-                {readOnlyNote ?? "Rendez-vous local : il n'est pas envoyé vers Google Agenda."}
-              </AppText>
-            </View>
-          )}
+          <View style={styles.note}>
+            <Icon name="info" size={16} color={colors.textTertiary} />
+            <AppText variant="caption" color={colors.textSecondary} style={{ flex: 1 }}>
+              {readOnlyNote ?? "Rendez-vous local : il n'est pas envoyé vers Google Agenda."}
+            </AppText>
+          </View>
 
-          {onDelete && !embedded && (
+          {onDelete && (
             <Pressable onPress={confirmDelete} accessibilityRole="button" style={styles.deleteBtn}>
               <Icon name="trash" size={18} color={colors.textSecondary} />
               <AppText variant="label" color={colors.textSecondary}>
