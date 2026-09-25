@@ -22,13 +22,13 @@ import { monthName, shiftDay, todayKey, yearOf } from '@/lib/dates';
 import { colors, fonts, TAB_BAR_CLEARANCE } from '@/theme/tokens';
 
 /*
- * Vue Liste en « roue » : le jour en haut de la liste est le jour sélectionné (ouvert).
- * En défilant, la sélection change d'un jour à l'autre et la liste s'arrête toujours
- * sur un jour. Les jours passés se chargent au fur et à mesure en remontant.
+ * Vue Liste en « roue » : le jour sélectionné est le 2e visible (la veille reste visible
+ * au-dessus). Pendant le défilement, tous les jours sont fermés et la liste glisse librement ;
+ * elle s'arrête toujours sur un jour, et ce jour ne s'ouvre qu'après une courte pause.
  *
- * Géométrie : chaque jour fermé occupe STEP px (carte de 92 + 8 d'espace). Tous les jours
- * au-dessus du jour sélectionné sont fermés, donc le jour n°i est ouvert quand le défilement
- * vaut i × STEP : la sélection se déduit directement du défilement, sans effet de bord.
+ * Géométrie : chaque jour fermé occupe STEP px (carte de 92 + 8 d'espace). Au repos, le jour
+ * n°i est sélectionné quand le défilement vaut (i − 1) × STEP. Ouvrir ou fermer un jour ne
+ * change que ce qui est en dessous : rien ne bouge au-dessus, donc pas de saut.
  */
 const CLOSED = 92;
 const GAP = 8;
@@ -36,6 +36,8 @@ const STEP = CLOSED + GAP;
 const LOAD_BEFORE = 30; // jours chargés avant aujourd'hui au départ
 const LOAD_AFTER = 60;
 const CHUNK = 60; // jours ajoutés quand on approche d'un bord
+const OPEN_DELAY = 220; // pause avant d'ouvrir le jour, une fois la liste arrêtée
+const ABOVE = 1; // nombre de jours visibles au-dessus du jour sélectionné
 
 let listShown = false;
 
@@ -44,6 +46,9 @@ export function ListView({ switcher }: { switcher: React.ReactNode }) {
   const list = useRef<FlatList<AgendaDay>>(null);
   const [range, setRange] = useState({ from: shiftDay(today, -LOAD_BEFORE), to: shiftDay(today, LOAD_AFTER) });
   const [selected, setSelected] = useState(today);
+  const [openDay, setOpenDay] = useState<string | null>(today);
+  const focal = useRef(today); // jour sous le repère pendant le défilement
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [openHeight, setOpenHeight] = useState(260);
   const [interacted, setInteracted] = useState(false);
   const onItemPress = useItemPress();
@@ -65,27 +70,59 @@ export function ListView({ switcher }: { switcher: React.ReactNode }) {
 
   const days = data ?? [];
   const selIndex = Math.max(0, days.findIndex((d) => d.day === selected));
+  const openIndex = openDay ? days.findIndex((d) => d.day === openDay) : -1;
+
+  const dayAtOffset = (y: number) => {
+    const i = Math.min(days.length - 1, Math.max(0, Math.round(y / STEP) + ABOVE));
+    return days[i]?.day;
+  };
+  const cancelOpen = () => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+  };
+  /** Après une pause : le jour sous le repère devient la sélection et s'ouvre. */
+  const openAfterPause = (day: string | undefined, delay = OPEN_DELAY) => {
+    cancelOpen();
+    if (!day) return;
+    timer.current = setTimeout(() => {
+      setSelected(day);
+      setOpenDay(day);
+    }, delay);
+  };
 
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    if (!days.length) return;
-    const i = Math.min(days.length - 1, Math.max(0, Math.round(e.nativeEvent.contentOffset.y / STEP)));
-    const day = days[i].day;
-    if (day !== selected) {
-      Haptics.selectionAsync();
-      setSelected(day);
+    const day = dayAtOffset(e.nativeEvent.contentOffset.y);
+    if (day && day !== focal.current) {
+      focal.current = day;
+      Haptics.selectionAsync(); // un « cran » de la roue
     }
   };
-
-  const scrollToDay = (day: string, animated = true) => {
-    const i = days.findIndex((d) => d.day === day);
-    if (i >= 0) list.current?.scrollToOffset({ offset: i * STEP, animated });
+  const onDragStart = () => {
+    cancelOpen();
+    setInteracted(true);
+    setOpenDay(null); // tout se ferme pendant le défilement : la liste glisse sans à-coups
+  };
+  const onScrollSettled = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    openAfterPause(dayAtOffset(e.nativeEvent.contentOffset.y));
   };
 
-  // Positions exactes : fermés au-dessus de la sélection, hauteur mesurée pour le jour ouvert.
+  const scrollToDay = (day: string) => {
+    const i = days.findIndex((d) => d.day === day);
+    if (i < 0) return;
+    cancelOpen();
+    setInteracted(true);
+    setOpenDay(null);
+    focal.current = day;
+    list.current?.scrollToOffset({ offset: Math.max(0, i - ABOVE) * STEP, animated: true });
+    openAfterPause(day, 350);
+  };
+
+  // Positions exactes : jours fermés partout, sauf le jour ouvert (hauteur mesurée).
   const getItemLayout = (_: ArrayLike<AgendaDay> | null | undefined, index: number) => {
-    if (index < selIndex) return { length: STEP, offset: index * STEP, index };
-    if (index === selIndex) return { length: openHeight + GAP, offset: index * STEP, index };
-    return { length: STEP, offset: selIndex * STEP + openHeight + GAP + (index - selIndex - 1) * STEP, index };
+    if (openIndex < 0 || index <= openIndex) {
+      return { length: index === openIndex ? openHeight + GAP : STEP, offset: index * STEP, index };
+    }
+    return { length: STEP, offset: openIndex * STEP + openHeight + GAP + (index - openIndex - 1) * STEP, index };
   };
 
   const lateCount = late?.length ?? 0;
@@ -96,7 +133,6 @@ export function ListView({ switcher }: { switcher: React.ReactNode }) {
         <View style={{ width: 44 }} />
         <Pressable
           onPress={() => {
-            setInteracted(true);
             scrollToDay(today);
           }}
           disabled={selected === today}
@@ -142,10 +178,13 @@ export function ListView({ switcher }: { switcher: React.ReactNode }) {
           ref={list}
           data={days}
           keyExtractor={(d) => d.day}
-          initialScrollIndex={selIndex}
+          initialScrollIndex={Math.max(0, selIndex - ABOVE)}
           getItemLayout={getItemLayout}
           onScroll={onScroll}
-          onScrollBeginDrag={() => setInteracted(true)}
+          onScrollBeginDrag={onDragStart}
+          onScrollEndDrag={onScrollSettled}
+          onMomentumScrollBegin={cancelOpen}
+          onMomentumScrollEnd={onScrollSettled}
           scrollEventThrottle={16}
           snapToInterval={STEP}
           decelerationRate="fast"
@@ -159,10 +198,10 @@ export function ListView({ switcher }: { switcher: React.ReactNode }) {
           windowSize={9}
           contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: TAB_BAR_CLEARANCE + 200 }}
           renderItem={({ item, index }) => {
-            const open = item.day === selected;
+            const open = item.day === openDay;
             return (
               <Animated.View
-                entering={animateIn ? FadeInDown.delay(Math.min(Math.abs(index - selIndex), 6) * 40).duration(300) : undefined}
+                entering={animateIn ? FadeInDown.delay(Math.min(Math.abs(index - selIndex + ABOVE), 6) * 40).duration(300) : undefined}
                 style={{ paddingBottom: GAP }}
                 onLayout={open ? (e: LayoutChangeEvent) => setOpenHeight(Math.round(e.nativeEvent.layout.height) - GAP) : undefined}>
                 <DayCard
@@ -170,10 +209,7 @@ export function ListView({ switcher }: { switcher: React.ReactNode }) {
                   isToday={item.day === today}
                   open={open}
                   stats={open ? stats : undefined}
-                  onToggle={() => {
-                    setInteracted(true);
-                    scrollToDay(item.day);
-                  }}
+                  onToggle={() => scrollToDay(item.day)}
                   animate={interacted}
                   onItemPress={onItemPress}
                 />
