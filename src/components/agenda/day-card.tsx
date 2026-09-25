@@ -4,7 +4,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { AppText } from '@/components/app-text';
 import { Icon } from '@/components/icon';
 import type { AgendaDay, AgendaItem, DayStats } from '@/db/agenda';
-import { shortDayLabel } from '@/lib/dates';
+import { monthAbbr, shortDayLabel } from '@/lib/dates';
 import { colors, fonts, withAlpha } from '@/theme/tokens';
 
 type Props = {
@@ -24,6 +24,7 @@ type Props = {
 export function DayCard({ day, isToday, open, stats, onToggle, onItemPress, animate, numberStyle }: Props) {
   const n = Number(day.day.slice(8, 10));
   const label = isToday ? `${shortDayLabel(day.day)} · aujourd'hui` : shortDayLabel(day.day);
+  const month = monthAbbr(day.day);
 
   if (!open) {
     const summary = day.items.slice(0, 2);
@@ -35,7 +36,12 @@ export function DayCard({ day, isToday, open, stats, onToggle, onItemPress, anim
           accessibilityState={{ expanded: false }}
           accessibilityLabel={`Déplier ${label}`}
           style={({ pressed }) => [styles.closed, pressed && { opacity: 0.85 }]}>
-          <Animated.Text style={[styles.closedNumber, numberStyle]}>{n}</Animated.Text>
+          <View style={styles.closedLeft}>
+            <Animated.Text style={[styles.closedNumber, numberStyle]}>{n}</Animated.Text>
+            <AppText variant="caption" color={colors.textMuted} style={styles.month}>
+              {month}
+            </AppText>
+          </View>
           <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
             {summary.length === 0 ? (
               <SummaryLine label="Rien de prévu" dot={colors.pill} color={colors.textMuted} />
@@ -72,6 +78,9 @@ export function DayCard({ day, isToday, open, stats, onToggle, onItemPress, anim
         accessibilityLabel={`Replier ${label}`}
         style={styles.openLeft}>
         <AppText variant="hero">{n}</AppText>
+        <AppText variant="caption" color={colors.textSecondary} style={[styles.month, { marginBottom: 4 }]}>
+          {month}
+        </AppText>
         <AppText variant="caption" color={colors.textSecondary} style={{ fontSize: 13 }}>
           {label}
         </AppText>
@@ -155,11 +164,12 @@ const styles = StyleSheet.create({
     borderColor: colors.borderSoft,
     borderRadius: 24,
   },
+  closedLeft: { width: 104 },
+  month: { fontFamily: fonts.bodyMedium, fontSize: 12, letterSpacing: 0.3, marginTop: -2 },
   closedNumber: {
-    width: 104,
     fontFamily: fonts.displayThin,
-    fontSize: 64,
-    lineHeight: 70,
+    fontSize: 60,
+    lineHeight: 62,
     letterSpacing: -3,
     color: colors.textMuted,
   },
