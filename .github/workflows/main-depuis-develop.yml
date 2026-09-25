@@ -1,11 +1,14 @@
 # Seules les PR venant de develop peuvent viser main.
-# Lançable à la main sur develop (onglet Actions) si la vérification n'a pas démarré sur la PR.
+# Tourne aussi à chaque push sur develop : le check « source » est posé sur le commit de tête de la PR
+# même si l'événement pull_request ne déclenche rien. Lançable à la main (onglet Actions).
 name: Source de la PR vers main
 
 on:
   pull_request:
     types: [opened, reopened, synchronize, edited]
     branches: [main]
+  push:
+    branches: [develop]
   workflow_dispatch:
 
 jobs:
