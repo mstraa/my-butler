@@ -30,12 +30,14 @@ import { colors, fonts, withAlpha } from '@/theme/tokens';
  * Rendez-vous en feuille, deux états :
  * - Aperçu (maquette HF-RdvPreview) : hauteur du contenu, boutons Fermer / Éditer en bas ;
  * - Détail (maquette HF-RdvDetail) : on tire la feuille vers le haut, elle prend tout l'écran ;
- *   Fermer / Éditer sortent vite par le bas, puis Reporter / Dupliquer / Annuler montent à leur place.
+ *   Reporter / Dupliquer / Annuler montent du bas.
+ * Depuis le détail, tirer encore vers le haut : les boutons sortent par le bas → édition.
  * Depuis le détail : tirer un peu vers le bas → aperçu ; beaucoup → tout se ferme.
  */
 const ease = Easing.bezier(0.2, 0.8, 0.2, 1);
 const easeIn = Easing.bezier(0.4, 0, 1, 1);
 const FLING = 700;
+const PULL_EDIT = 90; // tirage vers le haut, en détail, pour ouvrir l'édition
 
 type Mode = 'preview' | 'detail' | 'close';
 
@@ -44,8 +46,8 @@ export default function EventSheet() {
   const insets = useSafeAreaInsets();
   const { height: winH } = useWindowDimensions();
   const FULL = winH - insets.top - 8; // hauteur de la feuille ouverte en grand
-  const BTN_BLOCK = 14 + 52 + Math.max(insets.bottom, 12) + 12; // zone des boutons de l'aperçu
-  const EXTRA = 10 + 52; // ligne « Annuler » en plus en détail
+  const BOTTOM = Math.max(insets.bottom, 12) + 12;
+  const FOOTER_H = 14 + 52 + 10 + 52 + BOTTOM; // Reporter / Dupliquer + Annuler
   const mutate = useDbMutation();
   const [detail, setDetail] = useState(false);
 
@@ -58,12 +60,19 @@ export default function EventSheet() {
   const previewH = useSharedValue(0); // hauteur visible en aperçu
   const start = useSharedValue(0);
   const inDetail = useSharedValue(false);
-  const ignore = useSharedValue(false);
   const scrollY = useSharedValue(0);
   const closing = useSharedValue(false);
+  const canDown = useSharedValue(true);
+  const canUp = useSharedValue(true);
+  const pull = useSharedValue(0); // tirage vers le haut en détail (px de doigt)
+  const armed = useSharedValue(false);
+  const contentH = useSharedValue(0);
+  const viewH = useSharedValue(0);
 
   const goBack = () => router.back();
   const setMode = (d: boolean) => setDetail(d);
+  const tick = () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  const openEdit = () => router.push({ pathname: '/rdv/modifier/[id]', params: { id }});
 
   const goto = (mode: Mode) => {
     'worklet';
@@ -88,9 +97,9 @@ export default function EventSheet() {
     return () => sub.remove();
   });
 
-  /** Hauteur de l'aperçu = haut de la feuille (jusqu'aux infos) + zone des boutons. */
+  /** Hauteur de l'aperçu = haut de la feuille (jusqu'aux infos) + marge basse. */
   const onTopLayout = (e: LayoutChangeEvent) => {
-    const h = Math.min(FULL * 0.85, e.nativeEvent.layout.height + BTN_BLOCK);
+    const h = Math.min(FULL * 0.85, e.nativeEvent.layout.height + BOTTOM);
     const first = previewH.get() === 0;
     previewH.set(h);
     if (inDetail.get() || closing.get()) return;
@@ -104,19 +113,47 @@ export default function EventSheet() {
     .simultaneousWithExternalGesture(native)
     .onBegin(() => {
       start.set(ty.get());
-      // En détail, si le contenu est défilé, le geste sert au défilement.
-      ignore.set(inDetail.get() && scrollY.get() > 2);
+      pull.set(0);
+      armed.set(false);
+      // En détail, le geste ne prend la main qu'aux bords du défilement.
+      const d = inDetail.get();
+      canDown.set(!d || scrollY.get() <= 2);
+      canUp.set(!d || scrollY.get() >= contentH.get() - viewH.get() - 2);
     })
     .onUpdate((e) => {
-      if (ignore.get() || closing.get()) return;
-      const next = start.get() + e.translationY;
+      if (closing.get()) return;
+      const dy = e.translationY;
+      if (inDetail.get() && dy < 0) {
+        // Détail : on tire vers le haut pour éditer.
+        if (!canUp.get()) return;
+        pull.set(-dy);
+        ty.set(dy * 0.12);
+        const on = -dy >= PULL_EDIT;
+        if (on !== armed.get()) {
+          armed.set(on);
+          if (on) scheduleOnRN(tick);
+        }
+        return;
+      }
+      if (dy > 0 && !canDown.get()) return;
+      pull.set(0);
+      const next = start.get() + dy;
       ty.set(next < 0 ? next * 0.15 : next); // léger ressort au-dessus du plein écran
     })
     .onEnd((e) => {
-      if (ignore.get() || closing.get()) return;
+      if (closing.get()) return;
+      const wasDetail = inDetail.get();
+      if (wasDetail && pull.get() > 0) {
+        const go = pull.get() >= PULL_EDIT || e.velocityY < -FLING;
+        if (go) scheduleOnRN(openEdit);
+        pull.set(withTiming(0, { duration: go ? 500 : 220, easing: ease }));
+        ty.set(withTiming(0, { duration: 220, easing: ease }));
+        return;
+      }
+      if (e.translationY > 0 && !canDown.get()) return;
+      if (e.translationY < 0 && !canUp.get()) return;
       const P = FULL - previewH.get();
       const y = ty.get();
-      const wasDetail = inDetail.get();
       if (e.velocityY < -FLING) return goto('detail');
       if (e.velocityY > FLING) return goto(wasDetail && y < P ? 'preview' : 'close');
       if (y < P / 2) return goto('detail');
@@ -144,14 +181,22 @@ export default function EventSheet() {
     const t = Math.max(0, ty.get());
     return { transform: [{ translateY: -Math.min(t, FULL - previewH.get()) }] };
   });
-  // Aperçu : sortie rapide par le bas dès le début du geste.
-  const previewBtnStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: interpolate(progress.get(), [0, 0.3], [0, BTN_BLOCK + 16], 'clamp') }],
-  }));
-  // Détail : entrée par le bas juste après la sortie des boutons de l’aperçu.
-  const detailBtnStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: interpolate(progress.get(), [0.3, 0.6], [BTN_BLOCK + EXTRA + 16, 0], 'clamp') }],
-  }));
+  // Détail : les boutons montent du bas pendant l'ouverture, et ressortent par le bas quand on tire pour éditer.
+  const detailBtnStyle = useAnimatedStyle(() => {
+    const enter = interpolate(progress.get(), [0.3, 0.7], [FOOTER_H + 16, 0], 'clamp');
+    const leave = interpolate(pull.get(), [0, PULL_EDIT * 0.5], [0, FOOTER_H + 16], 'clamp');
+    return { transform: [{ translateY: Math.max(enter, leave) }] };
+  });
+  const detailBodyStyle = useAnimatedStyle(() => ({ opacity: interpolate(progress.get(), [0, 0.4], [0, 1], 'clamp') }));
+  const hintStyle = useAnimatedStyle(() => {
+    const on = armed.get();
+    return {
+      opacity: interpolate(pull.get(), [PULL_EDIT * 0.3, PULL_EDIT * 0.8], [0, 1], 'clamp'),
+      transform: [{ scale: withTiming(on ? 1 : 0.92, { duration: 120 }) }],
+      backgroundColor: withTiming(on ? colors.text : colors.row, { duration: 120 }),
+    };
+  });
+  const hintTextStyle = useAnimatedStyle(() => ({ color: withTiming(armed.get() ? colors.onLight : colors.textSecondary, { duration: 120 }) }));
 
   const e = data?.event;
 
@@ -167,9 +212,11 @@ export default function EventSheet() {
             <Animated.ScrollView
               onScroll={onScroll}
               scrollEventThrottle={16}
+              onLayout={(ev) => viewH.set(ev.nativeEvent.layout.height)}
+              onContentSizeChange={(_, h) => contentH.set(h)}
               scrollEnabled={detail}
               showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: BTN_BLOCK + EXTRA + 12 }}>
+              contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: FOOTER_H + 12 }}>
               <View onLayout={onTopLayout} style={{ gap: 14, paddingTop: 10 }}>
                 <View style={styles.grabber} />
                 {data && !e && <AppText variant="title">Rendez-vous introuvable</AppText>}
@@ -177,43 +224,29 @@ export default function EventSheet() {
               </View>
 
               {e && (
-                <View style={{ gap: 14, paddingTop: 14 }} pointerEvents={detail ? 'auto' : 'none'}>
+                <Animated.View style={[{ gap: 14, paddingTop: 14 }, detailBodyStyle]} pointerEvents={detail ? 'auto' : 'none'}>
                   {e.deadline && <DeadlineSection event={e} />}
                   {e.source === 'google' && <GoogleNote />}
                   <NoteField event={e} />
-                </View>
+                </Animated.View>
               )}
             </Animated.ScrollView>
           </GestureDetector>
 
           {e && (
-            <Animated.View pointerEvents="box-none" style={[styles.anchor, { height: BTN_BLOCK + EXTRA }, anchorStyle]}>
-              {/* Aperçu : Fermer / Éditer */}
-              <Animated.View
-                pointerEvents={detail ? 'none' : 'auto'}
-                style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) + 12 }, previewBtnStyle]}>
-                <View style={styles.row}>
-                  <Pressable onPress={() => goto('close')} accessibilityRole="button" style={[styles.btn, styles.btnGhost, { flex: 1 }]}>
-                    <AppText variant="bodyStrong" color="#D4D4D8" style={{ fontSize: 15 }}>
-                      Fermer
-                    </AppText>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => router.push({ pathname: '/rdv/modifier/[id]', params: { id: String(e.id) } })}
-                    accessibilityRole="button"
-                    style={[styles.btn, styles.btnLight, { flex: 1.4 }]}>
-                    <Icon name="edit" size={16} color={colors.onLight} />
-                    <AppText variant="bodyStrong" color={colors.onLight} style={{ fontSize: 15 }}>
-                      Éditer
-                    </AppText>
-                  </Pressable>
-                </View>
-              </Animated.View>
+            <Animated.View pointerEvents="box-none" style={[styles.anchor, { height: FOOTER_H }, anchorStyle]}>
+              {/* Indice « tirer pour éditer », révélé quand les boutons sortent. */}
+              <View pointerEvents="none" style={[styles.hintWrap, { bottom: BOTTOM + 8 }]}>
+                <Animated.View style={[styles.hint, hintStyle]}>
+                  <Icon name="edit" size={15} color={colors.textSecondary} />
+                  <Animated.Text style={[styles.hintText, hintTextStyle]}>Relâcher pour éditer</Animated.Text>
+                </Animated.View>
+              </View>
 
               {/* Détail : Reporter / Dupliquer + Annuler */}
               <Animated.View
                 pointerEvents={detail ? 'auto' : 'none'}
-                style={[styles.footer, { gap: 10, paddingBottom: Math.max(insets.bottom, 12) + 12 }, detailBtnStyle]}>
+                style={[styles.footer, { gap: 10, paddingBottom: BOTTOM }, detailBtnStyle]}>
                 <View style={styles.row}>
                   <Pressable
                     onPress={() => router.push({ pathname: '/rdv/modifier/[id]', params: { id: String(e.id) } })}
@@ -435,6 +468,9 @@ const styles = StyleSheet.create({
   },
   googleBadge: { width: 28, height: 28, borderRadius: 9, backgroundColor: colors.row, alignItems: 'center', justifyContent: 'center' },
   anchor: { position: 'absolute', left: 0, right: 0, bottom: 0 },
+  hintWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
+  hint: { flexDirection: 'row', alignItems: 'center', gap: 8, height: 40, paddingHorizontal: 16, borderRadius: 999 },
+  hintText: { fontFamily: fonts.bodySemiBold, fontSize: 14 },
   row: { flexDirection: 'row', gap: 10 },
   footer: {
     position: 'absolute',
