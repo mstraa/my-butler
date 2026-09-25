@@ -28,8 +28,8 @@ type Props = {
 
 const HOUR = 34; // hauteur d'une heure dans la grille
 const HOURS_COL = 28;
-// Fenêtre visible : 8 h – 20 h (12 heures), toujours la même hauteur. Les rdv plus tôt
-// ou plus tard ajoutent des heures qu'on atteint en faisant défiler la grille.
+// Grille de hauteur fixe : 8 h – 20 h par défaut. Si un rdv commence plus tôt ou finit
+// plus tard, la plage s'élargit et les heures se resserrent pour tenir dans la même hauteur.
 const DAY_START = 8;
 const DAY_END = 20;
 const HEAD_H = 66;
@@ -124,7 +124,6 @@ function WeekPage({ weekStart, onPickDay }: { weekStart: string; onPickDay: (day
   const now = useNow();
   const days = weekDays(weekStart);
   const onItemPress = useItemPress();
-  const grid = useRef<ScrollView>(null);
 
   const { data } = useDbQuery(async (db) => {
     const [agenda, ratios] = await Promise.all([getAgendaDays(db, days[0], days[6]), getGoalRatios(db, days[0], days[6])]);
@@ -144,8 +143,9 @@ function WeekPage({ weekStart, onPickDay }: { weekStart: string; onPickDay: (day
     }
   }
   const hours = Array.from({ length: maxH - minH }, (_, i) => minH + i);
-  const nowTop = ((minutesOf(timeOf(now)) - minH * 60) / 60) * HOUR;
-  const showNow = days.includes(dayOf(now)) && nowTop >= 0 && nowTop <= hours.length * HOUR;
+  const hourH = GRID_H / hours.length; // hauteur d'une heure pour cette semaine
+  const nowTop = ((minutesOf(timeOf(now)) - minH * 60) / 60) * hourH;
+  const showNow = days.includes(dayOf(now)) && nowTop >= 0 && nowTop <= GRID_H;
 
   return (
         <View style={styles.card}>
@@ -185,27 +185,22 @@ function WeekPage({ weekStart, onPickDay }: { weekStart: string; onPickDay: (day
           </View>
 
           {/* Grille horaire */}
-          <ScrollView
-            ref={grid}
-            style={{ height: GRID_H, flexGrow: 0 }}
-            showsVerticalScrollIndicator={maxH - minH > DAY_END - DAY_START}
-            // Au départ, la grille montre 8 h – 20 h ; les heures en plus sont au-dessus / en dessous.
-            onContentSizeChange={() => grid.current?.scrollTo({ y: (DAY_START - minH) * HOUR, animated: false })}>
-            <View style={{ flexDirection: 'row', height: hours.length * HOUR }}>
+          <View>
+            <View style={{ flexDirection: 'row', height: GRID_H }}>
               <View style={{ width: HOURS_COL }}>
                 {hours.map((h) => (
-                  <AppText key={h} style={styles.hourLabel}>
+                  <AppText key={h} style={[styles.hourLabel, { height: hourH }]}>
                     {h}
                   </AppText>
                 ))}
               </View>
               {days.map((d, i) => {
                 const isToday = d === today;
-                const blocks = layoutDay(data?.agenda[i]?.items ?? [], minH);
+                const blocks = layoutDay(data?.agenda[i]?.items ?? [], minH, hourH);
                 return (
                   <View key={d} style={[styles.col, isToday && { backgroundColor: '#1F1F23' }]}>
                     {hours.map((h) => (
-                      <View key={h} style={styles.hourLine} />
+                      <View key={h} style={[styles.hourLine, { height: hourH }]} />
                     ))}
                     {blocks.map((b, j) => (
                       <Animated.View
@@ -231,7 +226,7 @@ function WeekPage({ weekStart, onPickDay }: { weekStart: string; onPickDay: (day
                 );
               })}
             </View>
-          </ScrollView>
+          </View>
         </View>
   );
 }
@@ -272,7 +267,7 @@ function endMinutes(it: AgendaItem) {
 }
 
 /** Place les éléments horaires d'un jour ; ceux qui se chevauchent se partagent la largeur. */
-function layoutDay(items: AgendaItem[], minH: number): Block[] {
+function layoutDay(items: AgendaItem[], minH: number, hourH: number): Block[] {
   const timed = items
     .filter((it) => !it.allDay && it.start && it.kind !== 'birthday')
     .map((it) => ({ it, s: minutesOf(timeOf(it.start)), e: endMinutes(it) }))
@@ -285,8 +280,8 @@ function layoutDay(items: AgendaItem[], minH: number): Block[] {
     for (const g of group) {
       out.push({
         item: g.it,
-        top: ((g.s - minH * 60) / 60) * HOUR + 1,
-        height: Math.max(((g.e - g.s) / 60) * HOUR - 2, 16),
+        top: ((g.s - minH * 60) / 60) * hourH + 1,
+        height: Math.max(((g.e - g.s) / 60) * hourH - 2, 14),
         lane: g.lane,
         lanes,
       });
@@ -348,7 +343,6 @@ const styles = StyleSheet.create({
   allDayDots: { flexDirection: 'row', gap: 2, height: 4 },
   allDayDot: { width: 4, height: 4, borderRadius: 2 },
   hourLabel: {
-    height: HOUR,
     paddingTop: 2,
     paddingLeft: 6,
     fontFamily: fonts.displayMedium,
@@ -356,7 +350,7 @@ const styles = StyleSheet.create({
     color: colors.textTertiary,
   },
   col: { flex: 1, borderLeftWidth: 1, borderLeftColor: colors.row },
-  hourLine: { height: HOUR, borderBottomWidth: 1, borderBottomColor: colors.row },
+  hourLine: { borderBottomWidth: 1, borderBottomColor: colors.row },
   block: { flex: 1, borderRadius: 8, paddingHorizontal: 4, paddingVertical: 3, overflow: 'hidden' },
   nowLine: { position: 'absolute', left: 0, right: 0, height: 2, backgroundColor: colors.text },
   nowDot: { position: 'absolute', left: -4, top: -3, width: 8, height: 8, borderRadius: 4, backgroundColor: colors.text },
