@@ -33,6 +33,15 @@ export function TabIconButton({ icon, label, isFocused, onPress, ...props }: Tab
   );
 }
 
+/**
+ * Espace à laisser en bas d'un écran pour qu'une carte s'arrête au-dessus de la barre
+ * flottante : marge du bas + hauteur de la barre (60) + 16 px d'air.
+ */
+export function useTabBarSpace() {
+  const insets = useSafeAreaInsets();
+  return Math.max(insets.bottom, 12) + 8 + 60 + 16;
+}
+
 /** Conteneur flottant : pilule d'onglets à gauche, bouton + à droite. */
 export function FloatingTabBar({ children }: { children: React.ReactNode }) {
   const insets = useSafeAreaInsets();

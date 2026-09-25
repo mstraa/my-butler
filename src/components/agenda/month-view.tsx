@@ -10,12 +10,13 @@ import { PeriodHeader } from '@/components/agenda/period-header';
 import { useItemPress } from '@/components/agenda/use-item-press';
 import { AppText } from '@/components/app-text';
 import { Icon } from '@/components/icon';
+import { useTabBarSpace } from '@/components/tab-bar';
 import { getAgendaDays, getDayStats, getGoalRatios } from '@/db/agenda';
 import { useDbQuery } from '@/db/use-query';
 import {
   mediumDayLabel, monthFromIndex, monthGrid, monthIndex, monthName, monthStart, shortDayLabel, todayKey, yearOf,
 } from '@/lib/dates';
-import { colors, fonts, TAB_BAR_CLEARANCE } from '@/theme/tokens';
+import { colors, fonts } from '@/theme/tokens';
 
 type Props = {
   focus: string;
@@ -36,6 +37,7 @@ export function MonthView({ focus, onShift, onSelect, onOpenDay, onToday, switch
   const today = todayKey();
   const carousel = useRef<CarouselHandle>(null);
   const onItemPress = useItemPress();
+  const bottomSpace = useTabBarSpace();
 
   const { data } = useDbQuery(async (db) => {
     const [agenda, stats] = await Promise.all([getAgendaDays(db, focus, focus), getDayStats(db, focus)]);
@@ -91,7 +93,11 @@ export function MonthView({ focus, onShift, onSelect, onOpenDay, onToday, switch
         </View>
 
         {/* Seule la liste du jour défile ; la grille et la légende restent en place. */}
-        <Animated.View key={focus} entering={FadeIn.duration(150)} style={styles.summary} accessibilityLiveRegion="polite">
+        <Animated.View
+          key={focus}
+          entering={FadeIn.duration(150)}
+          style={[styles.summary, { marginBottom: bottomSpace }]}
+          accessibilityLiveRegion="polite">
           <View style={styles.summaryHead}>
             <View style={{ flex: 1, minWidth: 0 }}>
               <AppText variant="title">{title}</AppText>
@@ -238,7 +244,6 @@ const styles = StyleSheet.create({
     minHeight: 120,
     marginHorizontal: 16,
     marginTop: 12,
-    marginBottom: TAB_BAR_CLEARANCE - 16,
     gap: 12,
     padding: 16,
     backgroundColor: colors.surfaceRaised,

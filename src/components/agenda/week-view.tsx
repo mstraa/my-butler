@@ -7,13 +7,14 @@ import { type CarouselHandle, PeriodCarousel } from '@/components/agenda/period-
 import { PeriodHeader } from '@/components/agenda/period-header';
 import { useItemPress } from '@/components/agenda/use-item-press';
 import { AppText } from '@/components/app-text';
+import { useTabBarSpace } from '@/components/tab-bar';
 import { type AgendaItem, getAgendaDays, getGoalRatios } from '@/db/agenda';
 import { useDbQuery } from '@/db/use-query';
 import {
   dayOf, isoWeek, minutesOf, timeOf, todayKey, weekDays, weekdayShort, weekFromIndex, weekIndex, weekRangeLabel,
 } from '@/lib/dates';
 import { useNow } from '@/lib/use-now';
-import { colors, fonts, TAB_BAR_CLEARANCE, withAlpha } from '@/theme/tokens';
+import { colors, fonts, withAlpha } from '@/theme/tokens';
 
 type Props = {
   focus: string;
@@ -62,6 +63,7 @@ function WeekPage({ weekStart, onPickDay }: { weekStart: string; onPickDay: (day
   const now = useNow();
   const days = weekDays(weekStart);
   const onItemPress = useItemPress();
+  const bottomSpace = useTabBarSpace();
 
   const { data } = useDbQuery(async (db) => {
     const [agenda, ratios] = await Promise.all([getAgendaDays(db, days[0], days[6]), getGoalRatios(db, days[0], days[6])]);
@@ -85,7 +87,7 @@ function WeekPage({ weekStart, onPickDay }: { weekStart: string; onPickDay: (day
   const showNow = days.includes(dayOf(now)) && nowTop >= 0 && nowTop <= hours.length * HOUR;
 
   return (
-        <View style={styles.card}>
+        <View style={[styles.card, { marginBottom: bottomSpace }]}>
           {/* En-têtes des jours */}
           <View style={styles.headRow}>
             <View style={{ width: HOURS_COL }} />
@@ -122,7 +124,7 @@ function WeekPage({ weekStart, onPickDay }: { weekStart: string; onPickDay: (day
           </View>
 
           {/* Grille horaire */}
-          <ScrollView contentContainerStyle={{ paddingBottom: TAB_BAR_CLEARANCE - 20 }} showsVerticalScrollIndicator={false}>
+          <ScrollView contentContainerStyle={{ paddingBottom: 8 }} showsVerticalScrollIndicator={false}>
             <View style={{ flexDirection: 'row', height: hours.length * HOUR }}>
               <View style={{ width: HOURS_COL }}>
                 {hours.map((h) => (
@@ -245,9 +247,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceRaised,
     borderWidth: 1,
     borderColor: colors.border,
-    borderTopLeftRadius: 22,
-    borderTopRightRadius: 22,
-    borderBottomWidth: 0,
+    borderRadius: 22,
     overflow: 'hidden',
   },
   headRow: { flexDirection: 'row', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: colors.border },
