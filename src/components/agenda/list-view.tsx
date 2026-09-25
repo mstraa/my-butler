@@ -1,6 +1,6 @@
 import * as Haptics from 'expo-haptics';
 import { Link } from 'expo-router';
-import { useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { type FlatList, type LayoutChangeEvent, Pressable, StyleSheet, View } from 'react-native';
 import Animated, {
   FadeInDown,
@@ -24,15 +24,15 @@ import { colors, fonts, TAB_BAR_CLEARANCE } from '@/theme/tokens';
 
 /*
  * Vue Liste en « roue » :
- * - aujourd'hui est toujours ouvert ;
+ * - aujourd'hui est ouvert au départ ;
  * - en défilant, rien ne s'ouvre : un cadre suit le jour visé (le 2e visible, la veille
- *   restant affichée au-dessus) et la liste s'arrête toujours sur un jour ;
- * - à l'arrêt, toucher le jour sélectionné l'ouvre ; il reste ouvert jusqu'à la fermeture
- *   de l'app.
+ *   restant affichée au-dessus). La roue garde son élan naturel, puis se cale en douceur
+ *   sur le jour le plus proche une fois arrêtée ;
+ * - à l'arrêt, toucher le jour sélectionné l'ouvre, le toucher à nouveau le referme ;
+ *   ces choix sont gardés jusqu'à la fermeture de l'app.
  *
  * Géométrie : un jour fermé occupe STEP px (carte de 92 + 8 d'espace), un jour ouvert sa
- * hauteur mesurée. `tops` donne la position de chaque jour ; les arrêts du défilement
- * (snapToOffsets) sont ces positions.
+ * hauteur mesurée. `tops` donne la position de chaque jour ; la roue se cale sur ces positions.
  */
 const CLOSED = 92;
 const GAP = 8;
@@ -43,8 +43,10 @@ const LOAD_AFTER = 60;
 const CHUNK = 60;
 const ABOVE = 1; // jours visibles au-dessus du jour sélectionné
 
-/** Jours ouverts à la main : gardés tant que l'app tourne (remis à zéro à la fermeture). */
+/** Jours ouverts / fermés à la main : gardés tant que l'app tourne (remis à zéro à la fermeture). */
 const openedDays = new Set<string>();
+const closedDays = new Set<string>(); // pour aujourd'hui, ouvert par défaut
+const ALIGN_DELAY = 80; // après un lâcher sans élan, attente avant de caler la roue
 let listShown = false;
 
 export function ListView({ switcher }: { switcher: React.ReactNode }) {
@@ -53,6 +55,9 @@ export function ListView({ switcher }: { switcher: React.ReactNode }) {
   const [range, setRange] = useState({ from: shiftDay(today, -LOAD_BEFORE), to: shiftDay(today, LOAD_AFTER) });
   const [selected, setSelected] = useState(today);
   const [opened, setOpened] = useState(() => new Set(openedDays));
+  const [closed, setClosed] = useState(() => new Set(closedDays));
+  const [justOpened, setJustOpened] = useState<string | null>(null); // seul jour dont l'ouverture s'anime
+  const alignTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [heights, setHeights] = useState<Record<string, number>>({});
   const onItemPress = useItemPress();
 
@@ -71,7 +76,7 @@ export function ListView({ switcher }: { switcher: React.ReactNode }) {
   });
 
   const days = data ?? [];
-  const isOpen = (day: string) => day === today || opened.has(day);
+  const isOpen = (day: string) => (day === today ? !closed.has(day) : opened.has(day));
 
   // Position de chaque jour dans la liste (et longueur totale en dernière case).
   const tops: number[] = [0];
@@ -80,22 +85,33 @@ export function ListView({ switcher }: { switcher: React.ReactNode }) {
     tops.push(tops[tops.length - 1] + h);
   }
   const topsSV = useSharedValue<number[]>([]);
-  topsSV.set(tops);
+  useLayoutEffect(() => {
+    topsSV.set(tops);
+  });
 
   const scrollY = useSharedValue(0);
   const lastFocal = useSharedValue(-1);
 
-  /** Index du jour sélectionné pour un défilement donné (le jour au-dessus est en haut). */
-  const indexAt = (y: number) => {
-    let k = 0;
-    while (k < tops.length - 2 && tops[k + 1] <= y + 1) k++;
-    return Math.min(days.length - 1, k + ABOVE);
-  };
+
 
   const tick = () => Haptics.selectionAsync();
+  /** La roue s'est arrêtée : on se cale en douceur sur le jour le plus proche. */
   const settle = (y: number) => {
-    const d = days[indexAt(y)]?.day;
+    cancelAlign();
+    let k = 0;
+    for (let i = 1; i < tops.length - 1; i++) if (Math.abs(tops[i] - y) < Math.abs(tops[k] - y)) k = i;
+    const d = days[Math.min(days.length - 1, k + ABOVE)]?.day;
     if (d) setSelected(d);
+    if (Math.abs(tops[k] - y) > 1) list.current?.scrollToOffset({ offset: tops[k], animated: true });
+  };
+  const cancelAlign = () => {
+    if (alignTimer.current) clearTimeout(alignTimer.current);
+    alignTimer.current = null;
+  };
+  // Lâcher sans élan : on cale après un court instant (annulé si un élan démarre).
+  const onRelease = (y: number) => {
+    cancelAlign();
+    alignTimer.current = setTimeout(() => settle(y), ALIGN_DELAY);
   };
 
   const scrollHandler = useAnimatedScrollHandler({
@@ -107,7 +123,9 @@ export function ListView({ switcher }: { switcher: React.ReactNode }) {
         lastFocal.set(f);
       }
     },
-    onEndDrag: (e) => scheduleOnRN(settle, e.contentOffset.y),
+    onBeginDrag: () => scheduleOnRN(cancelAlign),
+    onEndDrag: (e) => scheduleOnRN(onRelease, e.contentOffset.y),
+    onMomentumBegin: () => scheduleOnRN(cancelAlign),
     onMomentumEnd: (e) => scheduleOnRN(settle, e.contentOffset.y),
   });
 
@@ -118,10 +136,18 @@ export function ListView({ switcher }: { switcher: React.ReactNode }) {
     list.current?.scrollToOffset({ offset: tops[Math.max(0, i - ABOVE)], animated: true });
   };
 
-  const openDay = (day: string) => {
+  const toggleDay = (day: string, open: boolean) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    openedDays.add(day);
-    setOpened(new Set(openedDays));
+    if (day === today) {
+      if (open) closedDays.add(day);
+      else closedDays.delete(day);
+      setClosed(new Set(closedDays));
+    } else {
+      if (open) openedDays.delete(day);
+      else openedDays.add(day);
+      setOpened(new Set(openedDays));
+    }
+    setJustOpened(open ? null : day);
   };
 
   const getItemLayout = (_: ArrayLike<AgendaDay> | null | undefined, index: number) => ({
@@ -182,13 +208,12 @@ export function ListView({ switcher }: { switcher: React.ReactNode }) {
           ref={list}
           data={days}
           keyExtractor={(d) => d.day}
-          extraData={opened}
+          extraData={[opened, closed]}
           initialScrollIndex={Math.max(0, (todayIndex < 0 ? 0 : todayIndex) - ABOVE)}
           getItemLayout={getItemLayout}
           onScroll={scrollHandler}
           scrollEventThrottle={16}
-          snapToOffsets={tops.slice(0, -1)}
-          decelerationRate="fast"
+          decelerationRate="normal"
           showsVerticalScrollIndicator={false}
           // En remontant : on ajoute des jours passés sans que la liste saute.
           maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
@@ -222,12 +247,13 @@ export function ListView({ switcher }: { switcher: React.ReactNode }) {
                   open={open}
                   stats={item.day === today ? todayStats : undefined}
                   onToggle={() => {
-                    if (open) return;
+                    // Jour ouvert : on le referme.
+                    if (open) return toggleDay(item.day, true);
                     // Jour sélectionné : on l'ouvre. Autre jour : on le fait venir à la sélection.
-                    if (item.day === selected) openDay(item.day);
+                    if (item.day === selected) toggleDay(item.day, false);
                     else scrollToDay(item.day);
                   }}
-                  animate
+                  animate={item.day === justOpened}
                   onItemPress={onItemPress}
                 />
               </Animated.View>
