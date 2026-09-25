@@ -1,5 +1,5 @@
 import * as Haptics from 'expo-haptics';
-import { router } from 'expo-router';
+import { router, useNavigation } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { BackHandler, Pressable, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -55,9 +55,12 @@ export default function AddSheet() {
     }));
   };
 
+  const navigation = useNavigation();
   // Bouton retour d'Android : même fermeture animée.
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      // Un écran ouvert par-dessus (ex. l'édition) gère son propre retour.
+      if (!navigation.isFocused()) return false;
       close();
       return true;
     });

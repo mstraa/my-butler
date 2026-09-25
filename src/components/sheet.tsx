@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useNavigation } from 'expo-router';
 import { useEffect } from 'react';
 import { BackHandler, Pressable, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -39,8 +39,11 @@ export function Sheet({ children, label }: { children: (close: CloseSheet) => Re
     );
   };
 
+  const navigation = useNavigation();
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      // Un écran ouvert par-dessus (ex. l'édition) gère son propre retour.
+      if (!navigation.isFocused()) return false;
       close();
       return true;
     });

@@ -1,5 +1,5 @@
 import * as Haptics from 'expo-haptics';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { BackHandler, type LayoutChangeEvent, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -79,9 +79,12 @@ export default function EventSheet() {
     );
   };
 
+  const navigation = useNavigation();
   // Retour d'Android : détail → aperçu → fermé.
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      // Un écran ouvert par-dessus (ex. l'édition) gère son propre retour.
+      if (!navigation.isFocused()) return false;
       goto(inDetail.get() ? 'preview' : 'close');
       return true;
     });
