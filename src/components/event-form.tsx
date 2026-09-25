@@ -1,4 +1,3 @@
-import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { useState } from 'react';
@@ -7,6 +6,7 @@ import Animated, { FadeIn, FadeInDown, LinearTransition } from 'react-native-rea
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppText } from '@/components/app-text';
+import { DateTimeSheet } from '@/components/form/date-time-sheet';
 import { Chip, FieldLabel, OptionSheet, PickerField, SwitchRow, TextField } from '@/components/form/fields';
 import { Icon } from '@/components/icon';
 import type { Category, EventDraft } from '@/db/events';
@@ -25,44 +25,20 @@ type Props = {
   readOnlyNote?: string;
 };
 
-const pad = (n: number) => String(n).padStart(2, '0');
-const hhmmOf = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 const addMinutes = (s: Stamp, min: number) => {
   const d = parseDay(dayOf(s));
   d.setHours(0, minutesOf(timeOf(s)) + min, 0, 0);
   return stamp(d);
 };
-const toDate = (s: Stamp) => {
-  const d = parseDay(dayOf(s));
-  d.setHours(0, minutesOf(timeOf(s)), 0, 0);
-  return d;
-};
-
-function pickDate(value: Stamp, onPick: (day: string) => void) {
-  DateTimePickerAndroid.open({
-    value: toDate(value),
-    mode: 'date',
-    onValueChange: (_e, d) => onPick(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`),
-  });
-}
-function pickTime(value: Stamp, onPick: (hhmm: string) => void) {
-  DateTimePickerAndroid.open({
-    value: toDate(value),
-    mode: 'time',
-    is24Hour: true,
-    onValueChange: (_e, d) => onPick(hhmmOf(d)),
-  });
-}
 
 /** Formulaire « Nouveau rendez-vous » / « Modifier le rendez-vous » (maquette HF-NouveauRdv). */
 export function EventForm({ title, initial, categories, onSave, onDelete, readOnlyNote }: Props) {
   const [d, setD] = useState<EventDraft>(initial);
-  const [sheet, setSheet] = useState<'reminder' | 'repeat' | null>(null);
+  const [sheet, setSheet] = useState<'reminder' | 'repeat' | 'when' | 'deadline' | null>(null);
   const [saving, setSaving] = useState(false);
   const [showErrors, setShowErrors] = useState(false);
 
   const set = (patch: Partial<EventDraft>) => setD((cur) => ({ ...cur, ...patch }));
-  const duration = d.endsAt ? Math.max(15, minutesBetween(d.startsAt, d.endsAt)) : 60;
 
   const titleError = !d.title.trim() ? 'Donne un titre au rendez-vous.' : null;
   const endError = !d.allDay && d.endsAt && d.endsAt <= d.startsAt ? 'La fin doit être après le début.' : null;
@@ -167,38 +143,21 @@ export function EventForm({ title, initial, categories, onSave, onDelete, readOn
                 label="Date"
                 flex={2}
                 value={dateFieldLabel(dayOf(d.startsAt))}
-                onPress={() =>
-                  pickDate(d.startsAt, (day) => {
-                    const startsAt = `${day}T${timeOf(d.startsAt)}`;
-                    set({ startsAt, endsAt: d.endsAt ? addMinutes(startsAt, duration) : null });
-                  })
-                }
+                onPress={() => setSheet('when')}
               />
               <PickerField
                 label="Début"
                 numeric
                 disabled={d.allDay}
                 value={timeOf(d.startsAt)}
-                onPress={() =>
-                  pickTime(d.startsAt, (hhmm) => {
-                    const startsAt = `${dayOf(d.startsAt)}T${hhmm}`;
-                    set({ startsAt, endsAt: addMinutes(startsAt, duration) });
-                  })
-                }
+                onPress={() => setSheet('when')}
               />
               <PickerField
                 label="Fin"
                 numeric
                 disabled={d.allDay}
                 value={d.endsAt ? timeOf(d.endsAt) : '—'}
-                onPress={() =>
-                  pickTime(d.endsAt ?? addMinutes(d.startsAt, 60), (hhmm) => {
-                    // Une fin plus tôt que le début passe au lendemain (ex. 22:00 → 01:00).
-                    let endsAt = `${dayOf(d.startsAt)}T${hhmm}`;
-                    if (endsAt <= d.startsAt) endsAt = `${shiftDay(dayOf(d.startsAt), 1)}T${hhmm}`;
-                    set({ endsAt });
-                  })
-                }
+                onPress={() => setSheet('when')}
               />
             </View>
             {showErrors && endError && <ErrorText>{endError}</ErrorText>}
@@ -254,17 +213,13 @@ export function EventForm({ title, initial, categories, onSave, onDelete, readOn
                     label="Avant le"
                     flex={2}
                     value={dateFieldLabel(dayOf(d.deadline.at))}
-                    onPress={() =>
-                      pickDate(d.deadline!.at, (day) => set({ deadline: { ...d.deadline!, at: `${day}T${timeOf(d.deadline!.at)}` } }))
-                    }
+                    onPress={() => setSheet('deadline')}
                   />
                   <PickerField
                     label="Heure"
                     numeric
                     value={timeOf(d.deadline.at)}
-                    onPress={() =>
-                      pickTime(d.deadline!.at, (hhmm) => set({ deadline: { ...d.deadline!, at: `${dayOf(d.deadline!.at)}T${hhmm}` } }))
-                    }
+                    onPress={() => setSheet('deadline')}
                   />
                 </View>
                 <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -300,6 +255,30 @@ export function EventForm({ title, initial, categories, onSave, onDelete, readOn
         </ScrollView>
       </KeyboardAvoidingView>
 
+      <DateTimeSheet
+        visible={sheet === 'when'}
+        title="Rendez-vous"
+        allDay={d.allDay}
+        value={{ day: dayOf(d.startsAt), start: timeOf(d.startsAt), end: d.allDay ? null : timeOf(d.endsAt ?? addMinutes(d.startsAt, 60)) }}
+        onDone={({ day, start, end }) => {
+          if (d.allDay) return set({ startsAt: `${day}T00:00`, endsAt: null });
+          const startsAt = `${day}T${start}`;
+          // Une fin plus tôt que le début passe au lendemain (ex. 22:00 → 01:00).
+          const endsAt = end! > start ? `${day}T${end}` : `${shiftDay(day, 1)}T${end}`;
+          set({ startsAt, endsAt });
+        }}
+        onClose={() => setSheet(null)}
+      />
+      {d.deadline && (
+        <DateTimeSheet
+          visible={sheet === 'deadline'}
+          title="Échéance avant le rdv"
+          timeLabel="Heure"
+          value={{ day: dayOf(d.deadline.at), start: timeOf(d.deadline.at), end: null }}
+          onDone={({ day, start }) => set({ deadline: { ...d.deadline!, at: `${day}T${start}` } })}
+          onClose={() => setSheet(null)}
+        />
+      )}
       <OptionSheet
         visible={sheet === 'reminder'}
         title="Rappel"
@@ -328,9 +307,6 @@ function ErrorText({ children, warn }: { children: React.ReactNode; warn?: boole
   );
 }
 
-function minutesBetween(a: Stamp, b: Stamp) {
-  return Math.round((toDate(b).getTime() - toDate(a).getTime()) / 60000);
-}
 
 /** Pas d'échéance proposée dans le passé : au plus tôt aujourd'hui. */
 function maxDay(k: string) {
