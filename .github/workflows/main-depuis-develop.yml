@@ -1,0 +1,16 @@
+# Seules les PR venant de develop peuvent viser main.
+name: Source de la PR vers main
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Vérifier que la PR vient de develop
+        if: github.head_ref != 'develop'
+        run: |
+          echo "::error::Les PR vers main doivent venir de develop (reçu : ${{ github.head_ref }})."
+          exit 1

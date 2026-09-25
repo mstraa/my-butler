@@ -1,0 +1,58 @@
+# À chaque PR develop → main fusionnée, crée un tag de version vX.Y.Z et une release GitHub.
+# Incrément : patch par défaut ; label « version:minor » ou « version:major » sur la PR pour changer.
+# Premier tag : version de app.json (0.1.0).
+name: Tag de version
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-tag
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    if: github.event.pull_request.merged == true && github.event.pull_request.head.ref == 'develop'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Calculer la version
+        id: version
+        env:
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: |
+          last=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1)
+          if [ -z "$last" ]; then
+            next="v$(node -p "require('./app.json').expo.version")"
+          else
+            IFS=. read -r major minor patch <<< "${last#v}"
+            case ",$LABELS," in
+              *,version:major,*) major=$((major+1)); minor=0; patch=0 ;;
+              *,version:minor,*) minor=$((minor+1)); patch=0 ;;
+              *)                 patch=$((patch+1)) ;;
+            esac
+            next="v${major}.${minor}.${patch}"
+          fi
+          echo "Version : ${last:-aucune} → $next"
+          echo "tag=$next" >> "$GITHUB_OUTPUT"
+
+      - name: Créer le tag et la release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+          SHA: ${{ github.event.pull_request.merge_commit_sha }}
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" "$SHA" -m "$TAG — $TITLE"
+          git push origin "$TAG"
+          gh release create "$TAG" --title "$TAG" --generate-notes --verify-tag

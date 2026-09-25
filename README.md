@@ -41,6 +41,13 @@ ne jamais modifier une migration existante, en ajouter une nouvelle.
 
 Au premier lancement, des données d'exemple sont créées autour d'aujourd'hui ; elles s'effacent depuis Réglages.
 
+## Branches et versions
+
+- `develop` : branche de travail, tout se fait ici.
+- `main` : versions publiées. On n'y touche que par une PR `develop` → `main`.
+- À chaque PR fusionnée sur `main`, GitHub Actions crée un tag `vX.Y.Z` et une release (patch par défaut ;
+  label `version:minor` ou `version:major` sur la PR pour monter plus haut). Premier tag : `v0.1.0`.
+
 ## Vérifier
 
 ```bash
