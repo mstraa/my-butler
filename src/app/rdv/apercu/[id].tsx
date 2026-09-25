@@ -6,8 +6,6 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Easing,
   interpolate,
-  interpolateColor,
-  type SharedValue,
   useAnimatedScrollHandler,
   useAnimatedStyle,
   useDerivedValue,
@@ -32,8 +30,7 @@ import { colors, fonts, withAlpha } from '@/theme/tokens';
  * Rendez-vous en feuille, deux états :
  * - Aperçu (maquette HF-RdvPreview) : hauteur du contenu, boutons Fermer / Éditer en bas ;
  * - Détail (maquette HF-RdvDetail) : on tire la feuille vers le haut, elle prend tout l'écran ;
- *   les boutons restent collés en bas et se transforment (Fermer → Reporter, Éditer → Dupliquer)
- *   pendant qu'« Annuler le rendez-vous » se déplie dessous.
+ *   Fermer / Éditer sortent vite par le bas, puis Reporter / Dupliquer / Annuler montent à leur place.
  * Depuis le détail : tirer un peu vers le bas → aperçu ; beaucoup → tout se ferme.
  */
 const ease = Easing.bezier(0.2, 0.8, 0.2, 1);
@@ -48,7 +45,7 @@ export default function EventSheet() {
   const { height: winH } = useWindowDimensions();
   const FULL = winH - insets.top - 8; // hauteur de la feuille ouverte en grand
   const BTN_BLOCK = 14 + 52 + Math.max(insets.bottom, 12) + 12; // zone des boutons de l'aperçu
-  const EXTRA = 10 + 52; // ligne « Annuler » ajoutée en détail
+  const EXTRA = 10 + 52; // ligne « Annuler » en plus en détail
   const mutate = useDbMutation();
   const [detail, setDetail] = useState(false);
 
@@ -142,19 +139,18 @@ export default function EventSheet() {
     const P = Math.max(FULL - previewH.get(), 1);
     return interpolate(ty.get(), [0, P], [1, 0], 'clamp');
   });
-  // Pied collé en bas de l'écran ; il ne descend qu'avec la feuille quand on la ferme.
-  const footerStyle = useAnimatedStyle(() => {
+  // Pieds collés en bas de l'écran ; ils ne descendent qu'avec la feuille quand on la ferme.
+  const anchorStyle = useAnimatedStyle(() => {
     const t = Math.max(0, ty.get());
     return { transform: [{ translateY: -Math.min(t, FULL - previewH.get()) }] };
   });
-  const extraStyle = useAnimatedStyle(() => ({
-    height: progress.get() * EXTRA,
-    opacity: interpolate(progress.get(), [0.4, 1], [0, 1], 'clamp'),
+  // Aperçu : sortie rapide par le bas dès le début du geste.
+  const previewBtnStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: interpolate(progress.get(), [0, 0.3], [0, BTN_BLOCK + 16], 'clamp') }],
   }));
-  const leftStyle = useAnimatedStyle(() => ({ flex: 1 }));
-  const rightStyle = useAnimatedStyle(() => ({
-    flex: interpolate(progress.get(), [0, 1], [1.4, 1]),
-    backgroundColor: interpolateColor(progress.get(), [0.15, 0.85], [colors.text, '#232327']),
+  // Détail : entrée par le bas sur la fin du geste.
+  const detailBtnStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: interpolate(progress.get(), [0.55, 1], [BTN_BLOCK + EXTRA + 16, 0], 'clamp') }],
   }));
 
   const e = data?.event;
@@ -190,43 +186,57 @@ export default function EventSheet() {
             </Animated.ScrollView>
           </GestureDetector>
 
-          {/* Pied : Fermer / Éditer en aperçu, qui se transforment en Reporter / Dupliquer + Annuler en détail. */}
           {e && (
-            <Animated.View
-              style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) + 12 }, footerStyle]}>
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                <Animated.View style={[styles.btn, styles.btnGhost, leftStyle]}>
-                  <Pressable
-                    onPress={() => {
-                      if (!detail) return goto('close');
-                      router.push({ pathname: '/rdv/modifier/[id]', params: { id: String(e.id) } });
-                    }}
-                    accessibilityRole="button"
-                    accessibilityLabel={detail ? 'Reporter' : 'Fermer'}
-                    style={styles.btnPress}>
-                    <MorphLabel p={progress} from={{ label: 'Fermer', color: '#D4D4D8' }} to={{ label: 'Reporter', icon: 'arrowRight', color: '#D4D4D8' }} />
+            <Animated.View pointerEvents="box-none" style={[styles.anchor, { height: BTN_BLOCK + EXTRA }, anchorStyle]}>
+              {/* Aperçu : Fermer / Éditer */}
+              <Animated.View
+                pointerEvents={detail ? 'none' : 'auto'}
+                style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) + 12 }, previewBtnStyle]}>
+                <View style={styles.row}>
+                  <Pressable onPress={() => goto('close')} accessibilityRole="button" style={[styles.btn, styles.btnGhost, { flex: 1 }]}>
+                    <AppText variant="bodyStrong" color="#D4D4D8" style={{ fontSize: 15 }}>
+                      Fermer
+                    </AppText>
                   </Pressable>
-                </Animated.View>
-                <Animated.View style={[styles.btn, rightStyle]}>
+                  <Pressable
+                    onPress={() => router.push({ pathname: '/rdv/modifier/[id]', params: { id: String(e.id) } })}
+                    accessibilityRole="button"
+                    style={[styles.btn, styles.btnLight, { flex: 1.4 }]}>
+                    <Icon name="edit" size={16} color={colors.onLight} />
+                    <AppText variant="bodyStrong" color={colors.onLight} style={{ fontSize: 15 }}>
+                      Éditer
+                    </AppText>
+                  </Pressable>
+                </View>
+              </Animated.View>
+
+              {/* Détail : Reporter / Dupliquer + Annuler */}
+              <Animated.View
+                pointerEvents={detail ? 'auto' : 'none'}
+                style={[styles.footer, { gap: 10, paddingBottom: Math.max(insets.bottom, 12) + 12 }, detailBtnStyle]}>
+                <View style={styles.row}>
+                  <Pressable
+                    onPress={() => router.push({ pathname: '/rdv/modifier/[id]', params: { id: String(e.id) } })}
+                    accessibilityRole="button"
+                    style={[styles.btn, styles.btnGhost, { flex: 1 }]}>
+                    <Icon name="arrowRight" size={16} color="#D4D4D8" />
+                    <AppText variant="bodyStrong" color="#D4D4D8" style={{ fontSize: 15 }}>
+                      Reporter
+                    </AppText>
+                  </Pressable>
                   <Pressable
                     onPress={async () => {
-                      if (!detail) return router.push({ pathname: '/rdv/modifier/[id]', params: { id: String(e.id) } });
                       const copy = await mutate((db) => duplicateEvent(db, e.id));
                       if (copy) router.push({ pathname: '/rdv/modifier/[id]', params: { id: String(copy) } });
                     }}
                     accessibilityRole="button"
-                    accessibilityLabel={detail ? 'Dupliquer' : 'Éditer'}
-                    style={styles.btnPress}>
-                    <MorphLabel
-                      p={progress}
-                      from={{ label: 'Éditer', icon: 'edit', color: colors.onLight }}
-                      to={{ label: 'Dupliquer', icon: 'copy', color: '#D4D4D8' }}
-                    />
+                    style={[styles.btn, styles.btnGhost, { flex: 1 }]}>
+                    <Icon name="copy" size={16} color="#D4D4D8" />
+                    <AppText variant="bodyStrong" color="#D4D4D8" style={{ fontSize: 15 }}>
+                      Dupliquer
+                    </AppText>
                   </Pressable>
-                </Animated.View>
-              </View>
-
-              <Animated.View style={[{ overflow: 'hidden', justifyContent: 'flex-end' }, extraStyle]} pointerEvents={detail ? 'auto' : 'none'}>
+                </View>
                 {e.cancelledAt ? (
                   <Pressable
                     onPress={() => {
@@ -234,7 +244,7 @@ export default function EventSheet() {
                       mutate((db) => restoreEvent(db, e.id));
                     }}
                     accessibilityRole="button"
-                    style={styles.primary}>
+                    style={[styles.btn, styles.btnLight]}>
                     <Icon name="undo" size={18} color={colors.onLight} />
                     <AppText variant="bodyStrong" color={colors.onLight} style={{ fontSize: 15 }}>
                       Rétablir le rendez-vous
@@ -244,7 +254,7 @@ export default function EventSheet() {
                   <Pressable
                     onPress={() => router.push({ pathname: '/rdv/annuler/[id]', params: { id: String(e.id) } })}
                     accessibilityRole="button"
-                    style={styles.primary}>
+                    style={[styles.btn, styles.btnLight]}>
                     <AppText variant="bodyStrong" color={colors.onLight} style={{ fontSize: 15 }}>
                       Annuler le rendez-vous
                     </AppText>
@@ -256,34 +266,6 @@ export default function EventSheet() {
         </Animated.View>
       </GestureDetector>
     </View>
-  );
-}
-
-type LabelSpec = { label: string; icon?: IconName; color: string };
-
-/** Libellé qui roule de `from` (p = 0) vers `to` (p = 1) : l'ancien monte et s'efface, le nouveau arrive d'en dessous. */
-function MorphLabel({ p, from, to }: { p: SharedValue<number>; from: LabelSpec; to: LabelSpec }) {
-  const outStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(p.get(), [0, 0.5], [1, 0], 'clamp'),
-    transform: [{ translateY: interpolate(p.get(), [0, 0.5], [0, -12], 'clamp') }],
-  }));
-  const inStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(p.get(), [0.5, 1], [0, 1], 'clamp'),
-    transform: [{ translateY: interpolate(p.get(), [0.5, 1], [12, 0], 'clamp') }],
-  }));
-  const layer = (l: LabelSpec, style: typeof outStyle) => (
-    <Animated.View style={[StyleSheet.absoluteFill, styles.labelLayer, style]}>
-      {l.icon && <Icon name={l.icon} size={16} color={l.color} />}
-      <AppText variant="bodyStrong" color={l.color} style={{ fontSize: 15 }}>
-        {l.label}
-      </AppText>
-    </Animated.View>
-  );
-  return (
-    <>
-      {layer(from, outStyle)}
-      {layer(to, inStyle)}
-    </>
   );
 }
 
@@ -452,6 +434,8 @@ const styles = StyleSheet.create({
     borderRadius: 18,
   },
   googleBadge: { width: 28, height: 28, borderRadius: 9, backgroundColor: colors.row, alignItems: 'center', justifyContent: 'center' },
+  anchor: { position: 'absolute', left: 0, right: 0, bottom: 0 },
+  row: { flexDirection: 'row', gap: 10 },
   footer: {
     position: 'absolute',
     left: 0,
@@ -461,17 +445,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     backgroundColor: colors.surfaceRaised,
   },
-  btn: { height: 52, borderRadius: 999, overflow: 'hidden' },
-  btnPress: { flex: 1 },
-  labelLayer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  btn: { height: 52, borderRadius: 999, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  btnLight: { backgroundColor: colors.text },
   btnGhost: { backgroundColor: '#232327' },
-  primary: {
-    height: 52,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderRadius: 999,
-    backgroundColor: colors.text,
-  },
 });
