@@ -50,9 +50,10 @@ export default function AgendaScreen() {
     setDirection(day > focus ? 1 : -1);
     setFocus(day);
   };
-  // Le bouton + crée au jour choisi en vue Jour ou Mois.
+  // Le bouton + crée au jour choisi en vue Jour ou Mois (la vue Liste gère le sien : dernier jour ouvert).
   useEffect(() => {
-    setSelectedDay(view === 'jour' || view === 'mois' ? focus : null);
+    if (view === 'jour' || view === 'mois') setSelectedDay(focus);
+    else if (view === 'semaine') setSelectedDay(null);
   }, [view, focus]);
 
   const changeView = (v: AgendaView) => {

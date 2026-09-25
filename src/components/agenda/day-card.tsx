@@ -13,6 +13,8 @@ type Props = {
   open: boolean;
   stats?: DayStats;
   onToggle: () => void;
+  /** Appui long : ajouter à ce jour. */
+  onLongPress?: () => void;
   onItemPress?: (item: AgendaItem) => void;
   /** Animer l'ouverture (seulement après un toucher, pas à l'affichage). */
   animate?: boolean;
@@ -21,7 +23,7 @@ type Props = {
 };
 
 /** Une carte par jour : gros chiffre fin ; ouverte, elle liste tout le jour (simple fondu à l'ouverture). */
-export function DayCard({ day, isToday, open, stats, onToggle, onItemPress, animate, numberStyle }: Props) {
+export function DayCard({ day, isToday, open, stats, onToggle, onLongPress, onItemPress, animate, numberStyle }: Props) {
   const n = Number(day.day.slice(8, 10));
   const label = isToday ? `${shortDayLabel(day.day)} · aujourd'hui` : shortDayLabel(day.day);
   const month = monthAbbr(day.day);
@@ -33,6 +35,7 @@ export function DayCard({ day, isToday, open, stats, onToggle, onItemPress, anim
       <View>
         <Pressable
           onPress={onToggle}
+          onLongPress={onLongPress}
           accessibilityRole="button"
           accessibilityState={{ expanded: false }}
           accessibilityLabel={`Déplier ${label}`}
@@ -77,6 +80,7 @@ export function DayCard({ day, isToday, open, stats, onToggle, onItemPress, anim
     <Animated.View entering={animate ? FadeIn.duration(160) : undefined} style={styles.open}>
       <Pressable
         onPress={onToggle}
+        onLongPress={onLongPress}
         accessibilityRole="button"
         accessibilityState={{ expanded: true }}
         accessibilityLabel={`Replier ${label}`}
