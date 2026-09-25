@@ -1,6 +1,7 @@
-import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/app-text';
+import { showDialog } from '@/components/dialog';
 import { BackHeader, Screen } from '@/components/screen';
 import { clearAllData } from '@/db/seed';
 import { useDbMutation, useDbQuery } from '@/db/use-query';
@@ -19,7 +20,7 @@ export default function SettingsScreen() {
   });
 
   const confirmClear = () =>
-    Alert.alert(
+    showDialog(
       "Effacer les données d'exemple ?",
       "Tous les rendez-vous, tâches, objectifs et anniversaires seront supprimés. Les catégories sont gardées.",
       [

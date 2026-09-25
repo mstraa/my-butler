@@ -8,6 +8,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
+import { DialogHost } from '@/components/dialog';
 import { migrateDbIfNeeded } from '@/db/migrations';
 import { colors } from '@/theme/tokens';
 
@@ -60,6 +61,7 @@ export default function RootLayout() {
               options={{ presentation: 'transparentModal', animation: 'none', contentStyle: { backgroundColor: 'transparent' } }}
             />
           </Stack>
+          <DialogHost />
         </SQLiteProvider>
       </ThemeProvider>
     </GestureHandlerRootView>

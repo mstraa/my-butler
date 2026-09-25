@@ -1,11 +1,12 @@
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown, LinearTransition } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppText } from '@/components/app-text';
+import { showDialog } from '@/components/dialog';
 import { DateTimeSheet } from '@/components/form/date-time-sheet';
 import { Chip, FieldLabel, OptionSheet, PickerField, SwitchRow, TextField } from '@/components/form/fields';
 import { Icon } from '@/components/icon';
@@ -58,12 +59,12 @@ export function EventForm({ title, initial, categories, onSave, onDelete, readOn
       router.back();
     } catch (e) {
       setSaving(false);
-      Alert.alert("Impossible d'enregistrer", e instanceof Error ? e.message : String(e));
+      showDialog("Impossible d'enregistrer", e instanceof Error ? e.message : String(e));
     }
   };
 
   const confirmDelete = () =>
-    Alert.alert('Supprimer ce rendez-vous ?', "Il disparaît de l'agenda, sans historique.", [
+    showDialog('Supprimer ce rendez-vous ?', "Il disparaît de l'agenda, sans historique.", [
       { text: 'Garder', style: 'cancel' },
       {
         text: 'Supprimer',
