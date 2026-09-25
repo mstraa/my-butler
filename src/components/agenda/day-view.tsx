@@ -13,17 +13,17 @@ import Animated, {
 import { PeriodHeader } from '@/components/agenda/period-header';
 import { PeriodCarousel } from '@/components/agenda/period-carousel';
 import { SwipePager } from '@/components/agenda/swipe-pager';
-import { useDarkFab } from '@/components/fab-tone';
 import { useItemPress } from '@/components/agenda/use-item-press';
 import { AppText } from '@/components/app-text';
 import { Icon } from '@/components/icon';
+import { useTabBarSpace } from '@/components/tab-bar';
 import { type AgendaItem, getAgendaDays, getDayStats } from '@/db/agenda';
 import { useDbQuery } from '@/db/use-query';
 import {
   dayOf, longDayTitle, minutesOf, monthName, timeOf, todayKey, weekDays, weekdayShort, weekFromIndex, weekIndex,
 } from '@/lib/dates';
 import { useNow } from '@/lib/use-now';
-import { colors, fonts, TAB_BAR_CLEARANCE, withAlpha } from '@/theme/tokens';
+import { categoryColors, colors, fonts, withAlpha } from '@/theme/tokens';
 
 type Props = {
   focus: string;
@@ -41,12 +41,12 @@ export function DayView({ focus, direction, onShift, onShiftWeek, onPickDay, onT
   const today = todayKey();
   const now = useNow();
   const onItemPress = useItemPress();
+  const bottomSpace = useTabBarSpace();
 
   const { data } = useDbQuery(async (db) => {
     const [days, stats] = await Promise.all([getAgendaDays(db, focus, focus), getDayStats(db, focus)]);
     return { key: focus, days, stats };
   }, focus, { cacheId: 'jour' });
-  useDarkFab();
 
   const day = data?.days.find((d) => d.day === focus);
   const items = day?.items ?? [];
@@ -84,19 +84,18 @@ export function DayView({ focus, direction, onShift, onShiftWeek, onPickDay, onT
       </View>
 
       {/* La feuille reste en place quand on change de jour : seul son contenu change. */}
-      <Animated.View entering={sheetEnter} style={styles.sheet}>
-          <View style={styles.grabber} />
+      <Animated.View entering={sheetEnter} style={[styles.sheet, { marginBottom: bottomSpace }]}>
           <View style={styles.sheetHead}>
-            <AppText variant="title" color={colors.sheetText} style={{ fontSize: 22 }}>
+            <AppText variant="title">
               {focus === today ? 'Ma journée' : 'La journée'}
             </AppText>
-            <AppText variant="caption" color={colors.sheetTextSecondary} style={{ fontSize: 13 }}>
+            <AppText variant="caption" style={{ fontSize: 13 }}>
               {summary}
             </AppText>
           </View>
 
         <SwipePager pageKey={data?.key} direction={direction} onShift={onShift}>
-          <ScrollView contentContainerStyle={{ paddingBottom: TAB_BAR_CLEARANCE, paddingTop: 4 }}>
+          <ScrollView contentContainerStyle={{ paddingBottom: 16, paddingTop: 4 }}>
             {data && (
               <Timeline
                 items={items}
@@ -153,16 +152,16 @@ function Timeline({
   };
 
   return (
-    <View style={{ paddingHorizontal: 20 }}>
+    <View style={{ paddingHorizontal: 16 }}>
       {(items.length > 0 || wokeAt) && <View style={styles.rail} />}
       <View style={{ gap: 10 }}>
         {wokeAt && (
           <Row animate={animate} delay={60} node={<DoneNode />}>
             <View style={[styles.card, styles.cardLight]}>
-              <AppText variant="bodyStrong" color={colors.sheetTextSecondary} style={{ fontSize: 15, flex: 1 }}>
+              <AppText variant="bodyStrong" color={colors.textSecondary} style={{ fontSize: 15, flex: 1 }}>
                 Levé
               </AppText>
-              <AppText variant="number" color={colors.sheetTextSecondary} style={{ fontSize: 14 }}>
+              <AppText variant="number" style={{ fontSize: 14 }}>
                 {wokeAt}
               </AppText>
             </View>
@@ -180,12 +179,12 @@ function Timeline({
 
       {items.length === 0 && (
         <Animated.View entering={animate ? rowEnter(80) : undefined} style={styles.empty}>
-          <AppText variant="bodyMedium" color={colors.sheetTextSecondary}>
+          <AppText variant="bodyMedium" color={colors.textTertiary}>
             Rien de prévu
           </AppText>
           <Pressable onPress={onAdd} accessibilityRole="button" style={styles.emptyBtn}>
-            <Icon name="plus" size={16} color={colors.sheetText} strokeWidth={2} />
-            <AppText variant="label" color={colors.sheetText}>
+            <Icon name="plus" size={16} strokeWidth={2} />
+            <AppText variant="label">
               Ajouter un rendez-vous
             </AppText>
           </Pressable>
@@ -212,19 +211,19 @@ function ItemCard({ item, state, remaining, onPress }: { item: AgendaItem; state
       <Pressable onPress={onPress} accessibilityRole="button" style={[styles.card, styles.cardCurrent]}>
         <View style={{ flex: 1, gap: 6 }}>
           <View style={styles.cardTop}>
-            <AppText variant="bodyStrong" style={{ fontFamily: fonts.bodyBold, fontSize: 17, flex: 1 }} numberOfLines={1}>
+            <AppText variant="bodyStrong" color={colors.onLight} style={{ fontFamily: fonts.bodyBold, fontSize: 17, flex: 1 }} numberOfLines={1}>
               {item.title}
             </AppText>
-            <AppText variant="number" style={{ fontSize: 14 }}>
+            <AppText variant="number" color="#5B5B61" style={{ fontSize: 14 }}>
               {time}
             </AppText>
           </View>
           {(item.location || item.end) && (
-            <AppText variant="caption" color={colors.textSecondary} style={{ fontSize: 13 }}>
+            <AppText variant="caption" color="#4A4A4F" style={{ fontSize: 13 }}>
               {[item.location, item.end ? `jusqu'à ${timeOf(item.end)}` : null].filter(Boolean).join(' · ')}
             </AppText>
           )}
-          <AppText variant="caption" style={{ marginTop: 2 }}>
+          <AppText variant="caption" color="#4A4A4F" style={{ marginTop: 2 }}>
             en cours · {remaining} restantes
           </AppText>
         </View>
@@ -251,18 +250,18 @@ function ItemCard({ item, state, remaining, onPress }: { item: AgendaItem; state
           <AppText
             variant="bodyStrong"
             numberOfLines={1}
-            color={muted ? '#6B6B70' : colors.sheetText}
+            color={muted ? colors.textMuted : colors.text}
             style={[{ fontSize: 15, flex: 1 }, (cancelled || state === 'taskDone') && { textDecorationLine: 'line-through' }]}>
             {item.title}
           </AppText>
-          <AppText variant="number" color={colors.sheetTextSecondary} style={{ fontSize: 14 }}>
+          <AppText variant="number" style={{ fontSize: 14 }}>
             {cancelled ? 'annulé' : time}
           </AppText>
         </View>
         {!cancelled && state !== 'birthday' && (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             {!isTask && <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: item.color }} />}
-            <AppText variant="caption" color={colors.sheetTextSecondary}>
+            <AppText variant="caption">
               {isTask ? (item.done ? 'Tâche faite' : 'Tâche') : [item.location, item.end ? `→ ${timeOf(item.end)}` : null].filter(Boolean).join(' · ') || 'Rendez-vous'}
             </AppText>
           </View>
@@ -277,22 +276,22 @@ function Node({ state, color }: { state: NodeState; color: string }) {
   if (state === 'current') return <PulseNode color={color} />;
   if (state === 'task' || state === 'taskDone')
     return (
-      <View style={[styles.node, { borderRadius: 5, borderWidth: 2, borderColor: colors.sheetText, backgroundColor: state === 'taskDone' ? colors.sheetText : '#fff' }]}>
-        {state === 'taskDone' && <Icon name="check" size={10} color="#fff" strokeWidth={4} />}
+      <View style={[styles.node, { borderRadius: 5, borderWidth: 2, borderColor: colors.text, backgroundColor: state === 'taskDone' ? colors.text : colors.surfaceRaised }]}>
+        {state === 'taskDone' && <Icon name="check" size={10} color={colors.onLight} strokeWidth={4} />}
       </View>
     );
   if (state === 'birthday') return <View style={[styles.node, { backgroundColor: color }]} />;
   return (
     <View
-      style={[styles.node, { backgroundColor: '#fff', borderWidth: 2, borderColor: '#C4C4CA', borderStyle: state === 'cancelled' ? 'dashed' : 'solid' }]}
+      style={[styles.node, { backgroundColor: colors.surfaceRaised, borderWidth: 2, borderColor: colors.textMuted, borderStyle: state === 'cancelled' ? 'dashed' : 'solid' }]}
     />
   );
 }
 
 function DoneNode() {
   return (
-    <View style={[styles.node, { backgroundColor: colors.sheetText }]}>
-      <Icon name="check" size={10} color="#fff" strokeWidth={4} />
+    <View style={[styles.node, { backgroundColor: colors.text }]}>
+      <Icon name="check" size={10} color={colors.onLight} strokeWidth={4} />
     </View>
   );
 }
@@ -306,7 +305,7 @@ function PulseNode({ color }: { color: string }) {
   return (
     <View style={{ width: 16, height: 16, alignItems: 'center', justifyContent: 'center' }}>
       <Animated.View style={[{ position: 'absolute', width: 16, height: 16, borderRadius: 8, backgroundColor: color }, halo]} />
-      <View style={[styles.node, { backgroundColor: color, borderWidth: 3, borderColor: '#fff' }]} />
+      <View style={[styles.node, { backgroundColor: color, borderWidth: 3, borderColor: colors.surfaceRaised }]} />
     </View>
   );
 }
@@ -367,40 +366,37 @@ const styles = StyleSheet.create({
   stripDay: { flex: 1, height: 64, alignItems: 'center', justifyContent: 'center', gap: 4, borderRadius: 18 },
   stripDayOn: { backgroundColor: colors.text },
   stripDot: { width: 4, height: 4, borderRadius: 2 },
+  // Section sombre, mêmes codes que les autres cartes de l'app.
   sheet: {
     flex: 1,
-    paddingTop: 10,
-    backgroundColor: colors.sheet,
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
+    marginHorizontal: 16,
+    backgroundColor: colors.surfaceRaised,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 24,
+    overflow: 'hidden',
   },
-  grabber: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: '#D4D4D8' },
   sheetHead: {
     flexDirection: 'row',
     alignItems: 'baseline',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 10,
+    paddingHorizontal: 16,
+    paddingTop: 16,
     paddingBottom: 12,
     gap: 8,
   },
-  rail: { position: 'absolute', left: 27, top: 18, bottom: 24, width: 2, backgroundColor: colors.sheetBorder },
+  rail: { position: 'absolute', left: 23, top: 18, bottom: 24, width: 2, backgroundColor: colors.border },
   node: { width: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   card: { minHeight: 48, flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 14, borderRadius: 16 },
   cardTop: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 },
-  cardLight: { backgroundColor: '#F4F4F5' },
-  cardTask: { backgroundColor: '#FFF7DB' },
-  cardCancelled: { backgroundColor: 'transparent', borderWidth: 1, borderStyle: 'dashed', borderColor: '#D4D4D8' },
+  cardLight: { backgroundColor: colors.row },
+  cardTask: { backgroundColor: withAlpha(categoryColors.groceries, 0.1), borderWidth: 1, borderColor: withAlpha(categoryColors.groceries, 0.25) },
+  cardCancelled: { backgroundColor: 'transparent', borderWidth: 1, borderStyle: 'dashed', borderColor: colors.borderDashed },
   cardCurrent: {
     paddingVertical: 14,
     paddingHorizontal: 16,
     borderRadius: 20,
-    backgroundColor: colors.sheetText,
-    shadowColor: colors.sheetText,
-    shadowOpacity: 0.25,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 8,
+    backgroundColor: colors.text,
   },
   empty: { alignItems: 'center', gap: 12, paddingVertical: 28 },
   emptyBtn: {
@@ -410,6 +406,6 @@ const styles = StyleSheet.create({
     height: 44,
     paddingHorizontal: 18,
     borderRadius: 999,
-    backgroundColor: '#F4F4F5',
+    backgroundColor: colors.row,
   },
 });
