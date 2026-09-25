@@ -50,7 +50,6 @@ export default function RootLayout() {
             <Stack.Screen name="reglages" options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="a-venir" options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="rdv/nouveau" options={{ animation: 'slide_from_bottom' }} />
-            <Stack.Screen name="rdv/[id]" options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="rdv/modifier/[id]" options={{ animation: 'slide_from_bottom' }} />
             <Stack.Screen
               name="rdv/apercu/[id]"
