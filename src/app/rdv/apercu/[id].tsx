@@ -6,6 +6,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Easing,
   interpolate,
+  type SharedValue,
   useAnimatedScrollHandler,
   useAnimatedStyle,
   useDerivedValue,
@@ -44,8 +45,8 @@ export default function EventSheet() {
   const insets = useSafeAreaInsets();
   const { height: winH } = useWindowDimensions();
   const FULL = winH - insets.top - 8; // hauteur de la feuille ouverte en grand
-  const BTN_BLOCK = 14 + 52 + Math.max(insets.bottom, 12) + 12; // zone des boutons de l'aperçu
-  const EXTRA = 10 + 52; // ligne « Annuler » en plus en détail
+  const BOTTOM = Math.max(insets.bottom, 12) + 12;
+  const FOOTER_H = 14 + 52 + 10 + 52 + BOTTOM; // Reporter / Dupliquer + Annuler (détail)
   const mutate = useDbMutation();
   const [detail, setDetail] = useState(false);
 
@@ -91,9 +92,9 @@ export default function EventSheet() {
     return () => sub.remove();
   });
 
-  /** Hauteur de l'aperçu = haut de la feuille (jusqu'aux infos) + zone des boutons. */
+  /** Hauteur de l'aperçu = haut de la feuille (jusqu'aux infos) + marge basse. */
   const onTopLayout = (e: LayoutChangeEvent) => {
-    const h = Math.min(FULL * 0.85, e.nativeEvent.layout.height + BTN_BLOCK);
+    const h = Math.min(FULL * 0.85, e.nativeEvent.layout.height + BOTTOM);
     const first = previewH.get() === 0;
     previewH.set(h);
     if (inDetail.get() || closing.get()) return;
@@ -148,12 +149,9 @@ export default function EventSheet() {
     return { transform: [{ translateY: -Math.min(t, FULL - previewH.get()) }] };
   });
   // Aperçu : sortie rapide par le bas dès le début du geste.
-  const previewBtnStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: interpolate(progress.get(), [0, 0.3], [0, BTN_BLOCK + 16], 'clamp') }],
-  }));
-  // Détail : entrée par le bas juste après la sortie des boutons de l’aperçu.
+  const detailBodyStyle = useAnimatedStyle(() => ({ opacity: interpolate(progress.get(), [0, 0.4], [0, 1], 'clamp') }));
   const detailBtnStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: interpolate(progress.get(), [0.3, 0.6], [BTN_BLOCK + EXTRA + 16, 0], 'clamp') }],
+    transform: [{ translateY: interpolate(progress.get(), [0.25, 0.6], [FOOTER_H + 16, 0], 'clamp') }],
   }));
 
   const e = data?.event;
@@ -172,51 +170,37 @@ export default function EventSheet() {
               scrollEventThrottle={16}
               scrollEnabled={detail}
               showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: BTN_BLOCK + EXTRA + 12 }}>
+              contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: FOOTER_H + 12 }}>
               <View onLayout={onTopLayout} style={{ gap: 14, paddingTop: 10 }}>
-                <View style={styles.grabber} />
+                <Grabber p={progress} />
                 {data && !e && <AppText variant="title">Rendez-vous introuvable</AppText>}
-                {e && <PreviewTop e={e} day={day} categories={data!.categories} onClose={() => goto('close')} />}
+                {e && (
+                  <PreviewTop
+                    e={e}
+                    day={day}
+                    categories={data!.categories}
+                    onClose={() => goto('close')}
+                    onEdit={() => router.push({ pathname: '/rdv/modifier/[id]', params: { id: String(e.id) } })}
+                  />
+                )}
               </View>
 
               {e && (
-                <View style={{ gap: 14, paddingTop: 14 }} pointerEvents={detail ? 'auto' : 'none'}>
+                <Animated.View style={[{ gap: 14, paddingTop: 14 }, detailBodyStyle]} pointerEvents={detail ? 'auto' : 'none'}>
                   {e.deadline && <DeadlineSection event={e} />}
                   {e.source === 'google' && <GoogleNote />}
                   <NoteField event={e} />
-                </View>
+                </Animated.View>
               )}
             </Animated.ScrollView>
           </GestureDetector>
 
           {e && (
-            <Animated.View pointerEvents="box-none" style={[styles.anchor, { height: BTN_BLOCK + EXTRA }, anchorStyle]}>
-              {/* Aperçu : Fermer / Éditer */}
-              <Animated.View
-                pointerEvents={detail ? 'none' : 'auto'}
-                style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) + 12 }, previewBtnStyle]}>
-                <View style={styles.row}>
-                  <Pressable onPress={() => goto('close')} accessibilityRole="button" style={[styles.btn, styles.btnGhost, { flex: 1 }]}>
-                    <AppText variant="bodyStrong" color="#D4D4D8" style={{ fontSize: 15 }}>
-                      Fermer
-                    </AppText>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => router.push({ pathname: '/rdv/modifier/[id]', params: { id: String(e.id) } })}
-                    accessibilityRole="button"
-                    style={[styles.btn, styles.btnLight, { flex: 1.4 }]}>
-                    <Icon name="edit" size={16} color={colors.onLight} />
-                    <AppText variant="bodyStrong" color={colors.onLight} style={{ fontSize: 15 }}>
-                      Éditer
-                    </AppText>
-                  </Pressable>
-                </View>
-              </Animated.View>
-
+            <Animated.View pointerEvents="box-none" style={[styles.anchor, { height: FOOTER_H }, anchorStyle]}>
               {/* Détail : Reporter / Dupliquer + Annuler */}
               <Animated.View
                 pointerEvents={detail ? 'auto' : 'none'}
-                style={[styles.footer, { gap: 10, paddingBottom: Math.max(insets.bottom, 12) + 12 }, detailBtnStyle]}>
+                style={[styles.footer, { gap: 10, paddingBottom: BOTTOM }, detailBtnStyle]}>
                 <View style={styles.row}>
                   <Pressable
                     onPress={() => router.push({ pathname: '/rdv/modifier/[id]', params: { id: String(e.id) } })}
@@ -272,14 +256,30 @@ export default function EventSheet() {
   );
 }
 
+/**
+ * Poignée en léger chevron, même longueur que la barre d'origine :
+ * pointe vers le haut en aperçu (on peut tirer), vers le bas en détail.
+ */
+function Grabber({ p }: { p: SharedValue<number> }) {
+  const left = useAnimatedStyle(() => ({ transform: [{ rotate: `${interpolate(p.get(), [0, 1], [-10, 10])}deg` }] }));
+  const right = useAnimatedStyle(() => ({ transform: [{ rotate: `${interpolate(p.get(), [0, 1], [10, -10])}deg` }] }));
+  return (
+    <View style={styles.grabber}>
+      <Animated.View style={[styles.grabHalf, { left: 0, transformOrigin: 'right center' }, left]} />
+      <Animated.View style={[styles.grabHalf, { right: 0, transformOrigin: 'left center' }, right]} />
+    </View>
+  );
+}
+
 /** Haut de la feuille, commun à l'aperçu et au détail. */
 function PreviewTop({
-  e, day, categories, onClose,
+  e, day, categories, onClose, onEdit,
 }: {
   e: EventRecord;
   day?: string;
   categories: Parameters<typeof categoryOf>[1];
   onClose: () => void;
+  onEdit: () => void;
 }) {
   const cat = categoryOf(e, categories);
   const { start, end } = occurrenceOf(e, day || undefined);
@@ -314,9 +314,14 @@ function PreviewTop({
           </View>
           <AppText variant="caption">Rendez-vous</AppText>
         </View>
-        <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Fermer" style={styles.closeBtn}>
-          <Icon name="x" size={16} color={colors.textSecondary} strokeWidth={2} />
-        </Pressable>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <Pressable onPress={onEdit} accessibilityRole="button" accessibilityLabel="Éditer" style={styles.closeBtn}>
+            <Icon name="edit" size={16} color={colors.textSecondary} />
+          </Pressable>
+          <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Fermer" style={styles.closeBtn}>
+            <Icon name="x" size={16} color={colors.textSecondary} strokeWidth={2} />
+          </Pressable>
+        </View>
       </View>
 
       <View style={{ gap: 6, paddingHorizontal: 4 }}>
@@ -396,7 +401,8 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 30,
     overflow: 'hidden',
   },
-  grabber: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: '#3A3A40' },
+  grabber: { alignSelf: 'center', width: 40, height: 8, justifyContent: 'center' },
+  grabHalf: { position: 'absolute', top: 2, width: 22, height: 4, borderRadius: 2, backgroundColor: '#3A3A40' },
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4, paddingLeft: 10, paddingRight: 12, borderRadius: 999 },
   chipDot: { width: 7, height: 7, borderRadius: 4 },
