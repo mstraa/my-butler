@@ -16,6 +16,11 @@ type Props = {
   renderPage: (index: number) => React.ReactNode;
   /** Appelé quand la page voisine est posée : le parent avance sa période. */
   onShift: (dir: -1 | 1) => void;
+  /**
+   * Hauteurs des pages [précédente, actuelle, suivante]. Si fourni, la hauteur du carrousel
+   * passe en douceur de l'une à l'autre en suivant le doigt (ex. mois de 5 ou 6 semaines).
+   */
+  heights?: [number, number, number];
   ref?: Ref<CarouselHandle>;
 };
 
@@ -28,7 +33,7 @@ const ease = Easing.bezier(0.2, 0.8, 0.2, 1);
  * affichées de chaque côté. Les pages sont placées à une position absolue (index × largeur),
  * si bien qu'une fois la page voisine posée, rien n'a besoin d'être recalé : pas de saut.
  */
-export function PeriodCarousel({ index, renderPage, onShift, ref }: Props) {
+export function PeriodCarousel({ index, renderPage, onShift, heights, ref }: Props) {
   const [width, setWidth] = useState(0);
   const [base] = useState(index); // origine des positions, pour garder de petites valeurs
   const pos = useSharedValue(0); // translation du ruban de pages
@@ -91,6 +96,15 @@ export function PeriodCarousel({ index, renderPage, onShift, ref }: Props) {
 
   const style = useAnimatedStyle(() => ({ transform: [{ translateX: pos.get() }] }));
 
+  // Hauteur interpolée entre la page actuelle et la voisine vers laquelle on glisse.
+  const [hPrev, hCur, hNext] = heights ?? [0, 0, 0];
+  const heightStyle = useAnimatedStyle(() => {
+    if (!heights || !width) return {};
+    const progress = Math.max(-1, Math.min(1, (pos.get() - rest) / width)); // > 0 : vers la précédente
+    const target = progress > 0 ? hPrev : hNext;
+    return { height: hCur + (target - hCur) * Math.abs(progress) };
+  });
+
   const onLayout = (e: LayoutChangeEvent) => {
     const w = Math.round(e.nativeEvent.layout.width);
     if (w !== width) {
@@ -101,7 +115,7 @@ export function PeriodCarousel({ index, renderPage, onShift, ref }: Props) {
 
   return (
     <GestureDetector gesture={pan}>
-      <View style={{ flex: 1, overflow: 'hidden' }} onLayout={onLayout}>
+      <Animated.View style={[heights ? null : { flex: 1 }, { overflow: 'hidden' }, heightStyle]} onLayout={onLayout}>
         {width > 0 && (
           <Animated.View style={[{ flex: 1 }, style]}>
             {[index - 1, index, index + 1].map((i) => (
@@ -115,7 +129,7 @@ export function PeriodCarousel({ index, renderPage, onShift, ref }: Props) {
             ))}
           </Animated.View>
         )}
-      </View>
+      </Animated.View>
     </GestureDetector>
   );
 }

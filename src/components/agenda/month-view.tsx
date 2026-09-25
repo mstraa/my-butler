@@ -28,8 +28,8 @@ type Props = {
 
 const LETTERS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
 const CELL = 50;
-// Hauteur fixe du carrousel : 6 semaines au plus (les mois de 5 semaines laissent une ligne vide).
-const GRID_HEIGHT = 8 + 26 + 6 * CELL + 6 + 2;
+/** Hauteur de la carte d'un mois selon son nombre de semaines (4 à 6). */
+const gridHeight = (month: string) => 8 + 26 + (monthGrid(month).length / 7) * CELL + 6 + 2;
 
 /** Vue Mois : la grille suit le doigt d'un mois à l'autre ; résumé du jour choisi dessous. */
 export function MonthView({ focus, onShift, onSelect, onOpenDay, onToday, switcher }: Props) {
@@ -67,15 +67,14 @@ export function MonthView({ focus, onShift, onSelect, onOpenDay, onToday, switch
       />
       {switcher}
 
-      <ScrollView contentContainerStyle={{ paddingBottom: TAB_BAR_CLEARANCE }} showsVerticalScrollIndicator={false}>
-        <View style={{ height: GRID_HEIGHT }}>
-          <PeriodCarousel
-            ref={carousel}
-            index={monthIndex(focus)}
-            onShift={onShift}
-            renderPage={(i) => <MonthGridPage month={monthFromIndex(i)} focus={focus} onSelect={onSelect} />}
-          />
-        </View>
+      <View style={{ flex: 1 }}>
+        <PeriodCarousel
+          ref={carousel}
+          index={monthIndex(focus)}
+          onShift={onShift}
+          heights={[-1, 0, 1].map((d) => gridHeight(monthFromIndex(monthIndex(focus) + d))) as [number, number, number]}
+          renderPage={(i) => <MonthGridPage month={monthFromIndex(i)} focus={focus} onSelect={onSelect} />}
+        />
 
         <View style={styles.legend}>
           <Legend
@@ -91,6 +90,7 @@ export function MonthView({ focus, onShift, onSelect, onOpenDay, onToday, switch
           <Legend swatch={<View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: '#2E2E33' }} />} label="Objectifs atteints" />
         </View>
 
+        {/* Seule la liste du jour défile ; la grille et la légende restent en place. */}
         <Animated.View key={focus} entering={FadeIn.duration(150)} style={styles.summary} accessibilityLiveRegion="polite">
           <View style={styles.summaryHead}>
             <View style={{ flex: 1, minWidth: 0 }}>
@@ -103,7 +103,7 @@ export function MonthView({ focus, onShift, onSelect, onOpenDay, onToday, switch
               <AppText style={{ fontFamily: fonts.bodySemiBold, fontSize: 13 }}>Ouvrir le jour ›</AppText>
             </Pressable>
           </View>
-          <View style={{ gap: 6 }}>
+          <ScrollView style={{ flexGrow: 0, flexShrink: 1 }} contentContainerStyle={{ gap: 6 }} showsVerticalScrollIndicator={false}>
             {selected.map((it) => (
               <ItemRow key={it.key} item={it} onPress={onItemPress} />
             ))}
@@ -118,9 +118,9 @@ export function MonthView({ focus, onShift, onSelect, onOpenDay, onToday, switch
                 <Icon name="plus" size={14} color={colors.textTertiary} strokeWidth={2} />
               </Pressable>
             )}
-          </View>
+          </ScrollView>
         </Animated.View>
-      </ScrollView>
+      </View>
     </View>
   );
 }
@@ -234,8 +234,11 @@ const styles = StyleSheet.create({
   dot: { width: 5, height: 5, borderRadius: 3 },
   legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 14, marginHorizontal: 20, marginTop: 4 },
   summary: {
+    flexShrink: 1,
+    minHeight: 120,
     marginHorizontal: 16,
     marginTop: 12,
+    marginBottom: TAB_BAR_CLEARANCE - 16,
     gap: 12,
     padding: 16,
     backgroundColor: colors.surfaceRaised,
