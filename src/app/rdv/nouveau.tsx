@@ -45,6 +45,7 @@ export default function NewEventScreen() {
         reminderMin: source ? source.reminderMin : 15,
         recurrence: 'none',
         deadline: null,
+        notes: source?.notes ?? '',
       }}
       onSave={async (draft) => {
         await mutate((db) => createEvent(db, draft));

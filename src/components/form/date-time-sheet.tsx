@@ -347,7 +347,7 @@ const styles = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
   cell: { width: `${100 / 7}%`, height: CELL, alignItems: 'center', justifyContent: 'center' },
   dayCircle: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  dayOn: { backgroundColor: colors.text },
+  dayOn: { backgroundColor: colors.text, borderRadius: 20, overflow: 'hidden' },
   todayRing: { borderWidth: 1, borderColor: colors.textTertiary },
   sliders: { gap: 6, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.row },
   sliderRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },

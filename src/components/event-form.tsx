@@ -138,28 +138,18 @@ export function EventForm({ title, initial, categories, onSave, onDelete, readOn
           </Animated.View>
 
           <Animated.View entering={FadeInDown.delay(120).duration(400)} style={{ gap: 6 }}>
-            <View style={styles.row}>
-              <PickerField
-                label="Date"
-                flex={2}
-                value={dateFieldLabel(dayOf(d.startsAt))}
-                onPress={() => setSheet('when')}
-              />
-              <PickerField
-                label="Début"
-                numeric
-                disabled={d.allDay}
-                value={timeOf(d.startsAt)}
-                onPress={() => setSheet('when')}
-              />
-              <PickerField
-                label="Fin"
-                numeric
-                disabled={d.allDay}
-                value={d.endsAt ? timeOf(d.endsAt) : '—'}
-                onPress={() => setSheet('when')}
-              />
-            </View>
+            <PickerField
+              label="Date et heure"
+              chevron
+              value={
+                d.allDay
+                  ? `${dateFieldLabel(dayOf(d.startsAt))} · toute la journée`
+                  : `${dateFieldLabel(dayOf(d.startsAt))} · ${timeOf(d.startsAt)} → ${d.endsAt ? timeOf(d.endsAt) : '—'}${
+                      d.endsAt && dayOf(d.endsAt) > dayOf(d.startsAt) ? ' (+1)' : ''
+                    }`
+              }
+              onPress={() => setSheet('when')}
+            />
             {showErrors && endError && <ErrorText>{endError}</ErrorText>}
           </Animated.View>
 
@@ -181,6 +171,15 @@ export function EventForm({ title, initial, categories, onSave, onDelete, readOn
             value={d.location}
             onChangeText={(location) => set({ location })}
             placeholder="Adresse ou lien"
+          />
+
+          <TextField
+            label="Note"
+            value={d.notes}
+            onChangeText={(notes) => set({ notes })}
+            placeholder="Code d'accès, choses à apporter…"
+            multiline
+            style={styles.noteInput}
           />
 
           <View style={styles.row}>
@@ -321,6 +320,7 @@ const styles = StyleSheet.create({
   body: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 40, gap: 14 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   row: { flexDirection: 'row', gap: 8 },
+  noteInput: { height: undefined, minHeight: 88, paddingTop: 12, paddingBottom: 12, textAlignVertical: 'top' },
   deadlineCard: {
     gap: 12,
     padding: 14,

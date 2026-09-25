@@ -20,6 +20,7 @@ export type EventDraft = {
   reminderMin: number | null;
   recurrence: Recurrence;
   deadline: { label: string; at: Stamp } | null;
+  notes: string;
 };
 
 export type EventRecord = EventDraft & {
@@ -29,7 +30,6 @@ export type EventRecord = EventDraft & {
   cancelledAt: string | null;
   cancelReason: string | null;
   cancelMode: 'keep' | 'hide' | null;
-  notes: string;
 };
 
 export async function getEvent(db: SQLiteDatabase, id: number): Promise<EventRecord | null> {
@@ -64,12 +64,12 @@ export async function getEvent(db: SQLiteDatabase, id: number): Promise<EventRec
 export async function createEvent(db: SQLiteDatabase, d: EventDraft) {
   const res = await db.runAsync(
     `INSERT INTO events (title, category_id, starts_at, ends_at, all_day, location, reminder_min, recurrence,
-                         deadline_at, deadline_label, deadline_state, source, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'app', ?)`,
+                         deadline_at, deadline_label, deadline_state, notes, source, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'app', ?)`,
     d.title.trim(), d.categoryId, d.startsAt, d.allDay ? null : d.endsAt, d.allDay ? 1 : 0,
     d.location.trim() || null, d.reminderMin, d.recurrence,
     d.deadline?.at ?? null, d.deadline ? d.deadline.label.trim() || null : null, d.deadline ? 'open' : null,
-    nowStamp(),
+    d.notes.trim() || null, nowStamp(),
   );
   return res.lastInsertRowId;
 }
@@ -84,12 +84,13 @@ export async function updateEvent(db: SQLiteDatabase, id: number, d: EventDraft)
     : null;
   await db.runAsync(
     `UPDATE events SET title = ?, category_id = ?, starts_at = ?, ends_at = ?, all_day = ?, location = ?,
-                       reminder_min = ?, recurrence = ?, deadline_at = ?, deadline_label = ?, deadline_state = ?
+                       reminder_min = ?, recurrence = ?, deadline_at = ?, deadline_label = ?, deadline_state = ?,
+                       notes = ?
       WHERE id = ?`,
     d.title.trim(), d.categoryId, d.startsAt, d.allDay ? null : d.endsAt, d.allDay ? 1 : 0,
     d.location.trim() || null, d.reminderMin, d.recurrence,
     d.deadline?.at ?? null, d.deadline ? d.deadline.label.trim() || null : null, deadlineState,
-    id,
+    d.notes.trim() || null, id,
   );
 }
 
@@ -125,7 +126,6 @@ export async function duplicateEvent(db: SQLiteDatabase, id: number) {
   const e = await getEvent(db, id);
   if (!e) return null;
   const newId = await createEvent(db, e);
-  if (e.notes) await setEventNotes(db, newId, e.notes);
   return newId;
 }
 
