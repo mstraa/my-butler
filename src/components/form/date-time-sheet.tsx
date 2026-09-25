@@ -38,6 +38,15 @@ const MAX = 24 * 60 - STEP; // 23:45
 const CELL = 46;
 const MONTH_HEAD = 44;
 const WEEKDAYS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+/** Durées rapides : la fin = début + durée. */
+const DURATIONS = [
+  { min: 15, label: '15 min' },
+  { min: 30, label: '30 min' },
+  { min: 45, label: '45 min' },
+  { min: 60, label: '1 h' },
+  { min: 90, label: '1 h 30' },
+  { min: 120, label: '2 h' },
+];
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const toMin = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
@@ -111,6 +120,11 @@ function SheetBody({ title, value, allDay, timeLabel = 'Heure', onDone, close }:
     setStart(m);
   };
   const nextDay = end !== null && end <= start;
+  const duration = end === null ? null : (end - start + 1440) % 1440;
+  const applyDuration = (min: number) => {
+    Haptics.selectionAsync();
+    setEnd((start + min) % 1440);
+  };
 
   const slot = allDay
     ? 'Toute la journée'
@@ -165,6 +179,28 @@ function SheetBody({ title, value, allDay, timeLabel = 'Heure', onDone, close }:
 
         {!allDay && (
           <View style={styles.sliders}>
+            {end !== null && (
+              <View style={styles.durations}>
+                {DURATIONS.map((o) => {
+                  const on = duration === o.min;
+                  return (
+                    <Pressable
+                      key={o.min}
+                      onPress={() => applyDuration(o.min)}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: on }}
+                      accessibilityLabel={`Durée ${o.label}`}
+                      style={[styles.durChip, on && styles.durChipOn]}>
+                      <AppText
+                        style={{ fontFamily: on ? fonts.bodySemiBold : fonts.bodyMedium, fontSize: 13 }}
+                        color={on ? colors.onLight : colors.textSecondary}>
+                        {o.label}
+                      </AppText>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
             <TimeSlider
               label={end === null ? timeLabel : 'Début'}
               value={start}
@@ -350,6 +386,17 @@ const styles = StyleSheet.create({
   dayOn: { backgroundColor: colors.text, borderRadius: 20, overflow: 'hidden' },
   todayRing: { borderWidth: 1, borderColor: colors.textTertiary },
   sliders: { gap: 6, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.row },
+  durations: { flexDirection: 'row', gap: 6, paddingBottom: 4 },
+  durChip: {
+    flex: 1,
+    height: 34,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  durChipOn: { backgroundColor: colors.text, borderColor: colors.text },
   sliderRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   sliderArea: { flex: 1, height: 48, justifyContent: 'center' },
   track: { position: 'absolute', left: 0, right: 0, height: 4, borderRadius: 2, backgroundColor: colors.row },
