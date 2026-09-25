@@ -47,8 +47,7 @@ export default function EventSheet() {
   const { id, day } = useLocalSearchParams<{ id: string; day?: string }>();
   const insets = useSafeAreaInsets();
   const { height: winH } = useWindowDimensions();
-  const FULL = winH - insets.top - 8; // hauteur de la feuille en détail
-  const TOP = insets.top + 8; // ce qu'elle gagne en plus en édition (pleine hauteur)
+  const FULL = winH - insets.top - 8; // hauteur de la feuille ouverte en grand (détail, édition)
   const BOTTOM = Math.max(insets.bottom, 12) + 12;
   const FOOTER_H = 14 + 52 + 10 + 52 + BOTTOM; // Reporter / Dupliquer + Annuler
   const mutate = useDbMutation();
@@ -189,14 +188,7 @@ export default function EventSheet() {
     },
   });
 
-  const sheetStyle = useAnimatedStyle(() => {
-    const k = editP.get();
-    return {
-      transform: [{ translateY: Math.max(0, ty.get()) + TOP * (1 - k) }],
-      borderTopLeftRadius: 30 * (1 - k),
-      borderTopRightRadius: 30 * (1 - k),
-    };
-  });
+  const sheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: Math.max(0, ty.get()) }] }));
   const veilStyle = useAnimatedStyle(() => ({
     opacity: interpolate(ty.get(), [FULL - Math.max(previewH.get(), 1), FULL], [1, 0], 'clamp'),
   }));
@@ -245,7 +237,7 @@ export default function EventSheet() {
       </Animated.View>
 
       <GestureDetector gesture={pan}>
-        <Animated.View accessibilityViewIsModal style={[styles.sheet, { height: winH }, sheetStyle]}>
+        <Animated.View accessibilityViewIsModal style={[styles.sheet, { height: FULL }, sheetStyle]}>
           <Animated.View style={[{ height: FULL }, detailLayerStyle]} pointerEvents={edit ? 'none' : 'auto'}>
           <GestureDetector gesture={native}>
             <Animated.ScrollView
@@ -340,9 +332,9 @@ export default function EventSheet() {
           )}
           </Animated.View>
 
-          {/* Édition : prolongement de la feuille, en pleine hauteur. */}
+          {/* Édition : prolongement de la feuille. */}
           {e && edit && (
-            <Animated.View style={[StyleSheet.absoluteFill, { paddingTop: insets.top + 6 }, editLayerStyle]}>
+            <Animated.View style={[StyleSheet.absoluteFill, { paddingTop: 10 }, editLayerStyle]}>
               <View style={styles.grabber} />
               <EventForm
                 key={editKey}
