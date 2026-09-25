@@ -1,14 +1,16 @@
+import { router } from 'expo-router';
 import { useRef } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { ScrollView } from 'react-native-gesture-handler';
-import Animated from 'react-native-reanimated';
+import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { type CarouselHandle, PeriodCarousel } from '@/components/agenda/period-carousel';
 import { PeriodHeader } from '@/components/agenda/period-header';
 import { useItemPress } from '@/components/agenda/use-item-press';
 import { AppText } from '@/components/app-text';
+import { Icon } from '@/components/icon';
 import { useTabBarSpace } from '@/components/tab-bar';
-import { type AgendaItem, getAgendaDays, getGoalRatios } from '@/db/agenda';
+import { type AgendaItem, getAgendaDays, getGoalRatios, getWeekGoals } from '@/db/agenda';
 import { useDbQuery } from '@/db/use-query';
 import {
   dayOf, isoWeek, minutesOf, timeOf, todayKey, weekDays, weekdayShort, weekFromIndex, weekIndex, weekRangeLabel,
@@ -26,6 +28,13 @@ type Props = {
 
 const HOUR = 34; // hauteur d'une heure dans la grille
 const HOURS_COL = 28;
+// Fenêtre visible : 8 h – 20 h (12 heures), toujours la même hauteur. Les rdv plus tôt
+// ou plus tard ajoutent des heures qu'on atteint en faisant défiler la grille.
+const DAY_START = 8;
+const DAY_END = 20;
+const HEAD_H = 66;
+const GRID_H = (DAY_END - DAY_START) * HOUR;
+const CARD_H = HEAD_H + 1 + GRID_H + 2;
 
 type Block = { item: AgendaItem; top: number; height: number; lane: number; lanes: number };
 
@@ -47,13 +56,65 @@ export function WeekView({ focus, onShift, onPickDay, onToday, switcher }: Props
       />
       {switcher}
 
-      <PeriodCarousel
-        ref={carousel}
-        index={weekIndex(focus)}
-        onShift={onShift}
-        renderPage={(i) => <WeekPage weekStart={weekFromIndex(i)} onPickDay={onPickDay} />}
-      />
+      <View style={{ height: CARD_H }}>
+        <PeriodCarousel
+          ref={carousel}
+          index={weekIndex(focus)}
+          onShift={onShift}
+          renderPage={(i) => <WeekPage weekStart={weekFromIndex(i)} onPickDay={onPickDay} />}
+        />
+      </View>
+
+      <WeekGoals weekStart={days[0]} />
     </View>
+  );
+}
+
+/** « Objectifs de la semaine », même carte que le résumé du jour de la vue Mois. */
+function WeekGoals({ weekStart }: { weekStart: string }) {
+  const today = todayKey();
+  const bottomSpace = useTabBarSpace();
+  const days = weekDays(weekStart);
+  const { data: goals } = useDbQuery((db) => getWeekGoals(db, days[0], days[6], today), days[0], { cacheId: 'objectifs-semaine' });
+
+  return (
+    <Animated.View key={weekStart} entering={FadeIn.duration(150)} style={[styles.summary, { marginBottom: bottomSpace }]}>
+      <View style={styles.summaryHead}>
+        <AppText variant="title" style={{ flex: 1 }}>
+          Objectifs de la semaine
+        </AppText>
+        <Pressable onPress={() => router.navigate('/objectifs')} accessibilityRole="button" style={styles.openBtn}>
+          <AppText style={{ fontFamily: fonts.bodySemiBold, fontSize: 13 }}>Voir ›</AppText>
+        </Pressable>
+      </View>
+      <ScrollView style={{ flexGrow: 0, flexShrink: 1 }} contentContainerStyle={{ gap: 12 }} showsVerticalScrollIndicator={false}>
+        {goals?.map((g) => (
+          <View key={g.id} style={styles.goalRow}>
+            <View style={[styles.goalIcon, { backgroundColor: withAlpha(g.color, 0.13) }]}>
+              <Icon name="target" size={16} color={g.color} />
+            </View>
+            <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
+                <AppText variant="bodyMedium" numberOfLines={1} style={{ flex: 1 }}>
+                  {g.title}
+                </AppText>
+                <AppText style={{ fontFamily: fonts.displayMedium, fontSize: 15 }}>
+                  {g.valueText} <AppText style={{ fontFamily: fonts.displayMedium, fontSize: 15 }} color={colors.textTertiary}>/ {g.targetText}</AppText>
+                </AppText>
+              </View>
+              <View style={styles.goalTrack}>
+                <View style={[styles.goalFill, { width: `${Math.round(g.ratio * 100)}%`, backgroundColor: g.color }]} />
+              </View>
+            </View>
+          </View>
+        ))}
+        {goals && goals.length === 0 && (
+          <AppText variant="body" color={colors.textTertiary}>
+            Aucun objectif pour l&apos;instant.
+          </AppText>
+        )}
+      </ScrollView>
+    </Animated.View>
   );
 }
 
@@ -63,16 +124,16 @@ function WeekPage({ weekStart, onPickDay }: { weekStart: string; onPickDay: (day
   const now = useNow();
   const days = weekDays(weekStart);
   const onItemPress = useItemPress();
-  const bottomSpace = useTabBarSpace();
+  const grid = useRef<ScrollView>(null);
 
   const { data } = useDbQuery(async (db) => {
     const [agenda, ratios] = await Promise.all([getAgendaDays(db, days[0], days[6]), getGoalRatios(db, days[0], days[6])]);
     return { agenda, ratios };
   }, days[0], { cacheId: 'semaine' });
 
-  // Plage horaire : 8 h – 20 h, élargie si un rdv en sort.
-  let minH = 8;
-  let maxH = 20;
+  // Plage horaire : 8 h – 20 h, élargie si un rdv en sort (la hauteur visible ne change pas).
+  let minH = DAY_START;
+  let maxH = DAY_END;
   for (const d of data?.agenda ?? []) {
     for (const it of d.items) {
       if (it.allDay || !it.start || it.kind === 'birthday') continue;
@@ -87,7 +148,7 @@ function WeekPage({ weekStart, onPickDay }: { weekStart: string; onPickDay: (day
   const showNow = days.includes(dayOf(now)) && nowTop >= 0 && nowTop <= hours.length * HOUR;
 
   return (
-        <View style={[styles.card, { marginBottom: bottomSpace }]}>
+        <View style={styles.card}>
           {/* En-têtes des jours */}
           <View style={styles.headRow}>
             <View style={{ width: HOURS_COL }} />
@@ -124,7 +185,12 @@ function WeekPage({ weekStart, onPickDay }: { weekStart: string; onPickDay: (day
           </View>
 
           {/* Grille horaire */}
-          <ScrollView contentContainerStyle={{ paddingBottom: 8 }} showsVerticalScrollIndicator={false}>
+          <ScrollView
+            ref={grid}
+            style={{ height: GRID_H, flexGrow: 0 }}
+            showsVerticalScrollIndicator={maxH - minH > DAY_END - DAY_START}
+            // Au départ, la grille montre 8 h – 20 h ; les heures en plus sont au-dessus / en dessous.
+            onContentSizeChange={() => grid.current?.scrollTo({ y: (DAY_START - minH) * HOUR, animated: false })}>
             <View style={{ flexDirection: 'row', height: hours.length * HOUR }}>
               <View style={{ width: HOURS_COL }}>
                 {hours.map((h) => (
@@ -241,6 +307,31 @@ function layoutDay(items: AgendaItem[], minH: number): Block[] {
 }
 
 const styles = StyleSheet.create({
+  summary: {
+    flexShrink: 1,
+    minHeight: 110,
+    marginHorizontal: 16,
+    marginTop: 12,
+    gap: 12,
+    padding: 16,
+    backgroundColor: colors.surfaceRaised,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 24,
+  },
+  summaryHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  openBtn: {
+    height: 36,
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: colors.borderDashed,
+    borderRadius: 999,
+  },
+  goalRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  goalIcon: { width: 28, height: 28, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  goalTrack: { height: 4, borderRadius: 2, backgroundColor: colors.border, overflow: 'hidden' },
+  goalFill: { height: 4, borderRadius: 2 },
   card: {
     flex: 1,
     marginHorizontal: 16,
@@ -250,7 +341,7 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     overflow: 'hidden',
   },
-  headRow: { flexDirection: 'row', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: colors.border },
+  headRow: { height: HEAD_H, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: colors.border },
   headCell: { flex: 1, alignItems: 'center', gap: 3, marginHorizontal: 2, paddingTop: 6, paddingBottom: 5, borderRadius: 14 },
   track: { width: 18, height: 3, borderRadius: 2, overflow: 'hidden' },
   fill: { height: 3, borderRadius: 2 },

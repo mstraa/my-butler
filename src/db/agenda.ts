@@ -294,6 +294,58 @@ export async function getGoalRatios(db: SQLiteDatabase, from: DayKey, to: DayKey
   return out;
 }
 
+export type WeekGoal = {
+  id: number;
+  title: string;
+  color: string;
+  /** Avancement affiché, ex. '1 / 3' ou '4 / 7 j'. */
+  valueText: string;
+  targetText: string;
+  ratio: number;
+};
+
+const GOAL_COLORS = [
+  categoryColors.health, categoryColors.sport, categoryColors.work,
+  categoryColors.groceries, categoryColors.family, categoryColors.friends,
+];
+
+/**
+ * Objectifs de la semaine [from, to] :
+ * - objectifs hebdomadaires : somme des saisies de la semaine face à la cible ;
+ * - objectifs quotidiens : nombre de jours atteints (jusqu'à aujourd'hui) sur 7.
+ */
+export async function getWeekGoals(db: SQLiteDatabase, from: DayKey, to: DayKey, today: DayKey): Promise<WeekGoal[]> {
+  const [goals, entries] = await Promise.all([
+    db.getAllAsync<{ id: number; title: string; period: string; kind: string; target: number | null; unit: string | null; color: string | null }>(
+      "SELECT id, title, period, kind, target, unit, color FROM goals WHERE active = 1 AND period IN ('day', 'week') ORDER BY sort, id",
+    ),
+    db.getAllAsync<{ goal_id: number; day: DayKey; value: number }>(
+      'SELECT goal_id, day, value FROM goal_entries WHERE day BETWEEN ? AND ?', from, to,
+    ),
+  ]);
+  return goals.map((g, i) => {
+    const mine = entries.filter((e) => e.goal_id === g.id);
+    const color = g.color ?? GOAL_COLORS[i % GOAL_COLORS.length];
+    if (g.period === 'week') {
+      const value = mine.reduce((s, e) => s + e.value, 0);
+      const target = g.kind === 'bool' ? 1 : g.target ?? 1;
+      const unit = g.unit ? ` ${g.unit}` : '';
+      return {
+        id: g.id, title: g.title, color,
+        valueText: fmtNum(value), targetText: `${fmtNum(target)}${unit}`,
+        ratio: Math.min(1, value / target),
+      };
+    }
+    const met = mine.filter((e) => e.day <= today && isMet(g.kind, g.target, e.value)).length;
+    return {
+      id: g.id, title: `${g.title} · chaque jour`, color,
+      valueText: String(met), targetText: '7 j', ratio: met / 7,
+    };
+  });
+}
+
+const fmtNum = (n: number) => String(Math.round(n * 10) / 10).replace('.', ',');
+
 /* ——— Saisie rapide (feuille « Ajouter ») ——— */
 
 export async function addToGoal(db: SQLiteDatabase, key: string, day: DayKey, delta: number) {
