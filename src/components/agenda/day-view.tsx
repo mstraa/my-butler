@@ -2,8 +2,7 @@ import { router } from 'expo-router';
 import { useEffect } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, {
-  FadeInDown,
-  SlideInDown,
+  FadeIn,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
@@ -96,7 +95,7 @@ export function DayView({ focus, direction, onShift, onPickDay, onToday, switche
 
       <SwipePager pageKey={data?.key} direction={direction} onShift={onShift}>
         <Animated.View
-          entering={direction === 0 ? SlideInDown.springify().damping(22).stiffness(200) : undefined}
+          entering={direction === 0 ? FadeIn.duration(180) : undefined}
           style={styles.sheet}>
           <View style={styles.grabber} />
           <View style={styles.sheetHead}>
@@ -167,7 +166,7 @@ function Timeline({
       {(items.length > 0 || wokeAt) && <View style={styles.rail} />}
       <View style={{ gap: 10 }}>
         {wokeAt && (
-          <Row delay={150} node={<DoneNode />}>
+          <Row delay={0} node={<DoneNode />}>
             <View style={[styles.card, styles.cardLight]}>
               <AppText variant="bodyStrong" color={colors.sheetTextSecondary} style={{ fontSize: 15, flex: 1 }}>
                 Levé
@@ -181,7 +180,7 @@ function Timeline({
         {items.map((it, i) => {
           const st = stateOf(it);
           return (
-            <Row key={it.key} delay={250 + i * 80} node={<Node state={st} color={it.color} />}>
+            <Row key={it.key} delay={Math.min(i + 1, 6) * 25} node={<Node state={st} color={it.color} />}>
               <ItemCard item={it} state={st} remaining={st === 'current' ? remaining(it) : ''} onPress={() => onItemPress(it)} />
             </Row>
           );
@@ -189,7 +188,7 @@ function Timeline({
       </View>
 
       {items.length === 0 && (
-        <Animated.View entering={FadeInDown.delay(200).duration(400)} style={styles.empty}>
+        <Animated.View entering={FadeIn.delay(80).duration(180)} style={styles.empty}>
           <AppText variant="bodyMedium" color={colors.sheetTextSecondary}>
             Rien de prévu
           </AppText>
@@ -207,7 +206,7 @@ function Timeline({
 
 function Row({ delay, node, children }: { delay: number; node: React.ReactNode; children: React.ReactNode }) {
   return (
-    <Animated.View entering={FadeInDown.delay(delay).duration(450)} style={{ flexDirection: 'row', gap: 16 }}>
+    <Animated.View entering={FadeIn.delay(delay).duration(180)} style={{ flexDirection: 'row', gap: 16 }}>
       <View style={{ width: 16, paddingTop: 16, alignItems: 'center' }}>{node}</View>
       <View style={{ flex: 1, minWidth: 0 }}>{children}</View>
     </Animated.View>
@@ -310,9 +309,9 @@ function DoneNode() {
 function PulseNode({ color }: { color: string }) {
   const p = useSharedValue(0);
   useEffect(() => {
-    p.value = withRepeat(withTiming(1, { duration: 1800 }), -1, false);
+    p.value = withRepeat(withTiming(1, { duration: 2200 }), -1, false);
   }, [p]);
-  const halo = useAnimatedStyle(() => ({ opacity: 0.55 * (1 - p.value), transform: [{ scale: 1 + p.value * 1.4 }] }));
+  const halo = useAnimatedStyle(() => ({ opacity: 0.3 * (1 - p.value), transform: [{ scale: 1 + p.value * 0.8 }] }));
   return (
     <View style={{ width: 16, height: 16, alignItems: 'center', justifyContent: 'center' }}>
       <Animated.View style={[{ position: 'absolute', width: 16, height: 16, borderRadius: 8, backgroundColor: color }, halo]} />

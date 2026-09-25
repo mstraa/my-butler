@@ -38,15 +38,18 @@ export function FloatingTabBar({ children }: { children: React.ReactNode }) {
   return (
     <View pointerEvents="box-none" style={[styles.wrap, { bottom: Math.max(insets.bottom, 12) + 8 }]}>
       <View style={styles.pill}>{children}</View>
-      <Link href="/ajouter" asChild>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Ajouter"
-          onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-          style={({ pressed }) => [styles.fab, pressed && { transform: [{ scale: 0.94 }] }]}>
-          <Icon name="plus" size={24} strokeWidth={2} color={colors.onLight} />
-        </Pressable>
-      </Link>
+      {/* Anneau sombre autour du bouton : il reste visible sur fond noir comme sur la feuille blanche. */}
+      <View style={styles.fabRing}>
+        <Link href="/ajouter" asChild>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Ajouter"
+            onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+            style={({ pressed }) => [styles.fab, pressed && { transform: [{ scale: 0.94 }] }]}>
+            <Icon name="plus" size={26} strokeWidth={2.4} color={colors.onLight} />
+          </Pressable>
+        </Link>
+      </View>
     </View>
   );
 }
@@ -80,13 +83,20 @@ const styles = StyleSheet.create({
   },
   tab: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
   tabActive: { backgroundColor: colors.text },
+  fabRing: {
+    padding: 6,
+    borderRadius: 999,
+    backgroundColor: colors.pill,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    ...shadow,
+  },
   fab: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: colors.text,
     alignItems: 'center',
     justifyContent: 'center',
-    ...shadow,
   },
 });
