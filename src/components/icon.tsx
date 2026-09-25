@@ -32,6 +32,15 @@ export const iconPaths = {
   timer: 'M4 13a8 8 0 1 0 16 0a8 8 0 1 0-16 0M12 9v4l2.5 1.5M9 2h6',
   info: 'M3 12a9 9 0 1 0 18 0a9 9 0 1 0-18 0M12 8v5M12 16v.5',
   trash: 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6',
+  bell: 'M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8M10 20a2 2 0 0 0 4 0',
+  repeat: 'M17 2l4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 0 1-3 3H3',
+  flag: 'M5 21V4M5 4h11l-2 4 2 4H5',
+  source: 'M4 7a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3zM8 12h8M12 8v8',
+  edit: 'M4 20h4L19 9l-4-4L4 16z',
+  copy: 'M11 8h9a0 0 0 0 1 0 0v9a3 3 0 0 1-3 3h-6a3 3 0 0 1-3-3v-6a3 3 0 0 1 3-3zM16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2',
+  arrowRight: 'M5 12h12M13 6l6 6-6 6',
+  more: 'M12 5h.01M12 12h.01M12 19h.01',
+  undo: 'M9 14L4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3',
 } as const;
 
 export type IconName = keyof typeof iconPaths;

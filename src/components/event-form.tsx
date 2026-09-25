@@ -9,29 +9,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppText } from '@/components/app-text';
 import { Chip, FieldLabel, OptionSheet, PickerField, SwitchRow, TextField } from '@/components/form/fields';
 import { Icon } from '@/components/icon';
-import type { Recurrence } from '@/db/agenda';
 import type { Category, EventDraft } from '@/db/events';
+import { RECURRENCES, REMINDERS } from '@/lib/event-options';
 import { dateFieldLabel, dayOf, minutesOf, parseDay, shiftDay, type Stamp, stamp, timeOf } from '@/lib/dates';
 import { colors, fonts } from '@/theme/tokens';
 
-export const REMINDERS: { value: number | null; label: string }[] = [
-  { value: null, label: 'Aucun' },
-  { value: 0, label: "À l'heure" },
-  { value: 5, label: '5 min avant' },
-  { value: 15, label: '15 min avant' },
-  { value: 30, label: '30 min avant' },
-  { value: 60, label: '1 h avant' },
-  { value: 120, label: '2 h avant' },
-  { value: 1440, label: '1 jour avant' },
-];
-
-export const RECURRENCES: { value: Recurrence; label: string }[] = [
-  { value: 'none', label: 'Jamais' },
-  { value: 'daily', label: 'Chaque jour' },
-  { value: 'weekly', label: 'Chaque semaine' },
-  { value: 'monthly', label: 'Chaque mois' },
-  { value: 'yearly', label: 'Chaque année' },
-];
+export { RECURRENCES, REMINDERS };
 
 type Props = {
   title: string;
@@ -111,7 +94,7 @@ export function EventForm({ title, initial, categories, onSave, onDelete, readOn
         style: 'destructive',
         onPress: async () => {
           await onDelete?.();
-          router.back();
+          router.dismissAll(); // le rdv n'existe plus : retour à l'agenda
         },
       },
     ]);
