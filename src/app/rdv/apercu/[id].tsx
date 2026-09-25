@@ -148,9 +148,9 @@ export default function EventSheet() {
   const previewBtnStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: interpolate(progress.get(), [0, 0.3], [0, BTN_BLOCK + 16], 'clamp') }],
   }));
-  // Détail : entrée par le bas sur la fin du geste.
+  // Détail : entrée par le bas juste après la sortie des boutons de l’aperçu.
   const detailBtnStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: interpolate(progress.get(), [0.55, 1], [BTN_BLOCK + EXTRA + 16, 0], 'clamp') }],
+    transform: [{ translateY: interpolate(progress.get(), [0.3, 0.6], [BTN_BLOCK + EXTRA + 16, 0], 'clamp') }],
   }));
 
   const e = data?.event;
