@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, View } from 'react-native';
-import Animated, { FadeIn, FadeInRight, LinearTransition } from 'react-native-reanimated';
+import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { AppText } from '@/components/app-text';
 import { Icon } from '@/components/icon';
@@ -20,9 +20,7 @@ type Props = {
   numberStyle?: React.ComponentProps<typeof Animated.Text>['style'];
 };
 
-const layout = LinearTransition.springify().damping(22).stiffness(220);
-
-/** Une carte par jour : gros chiffre fin ; ouverte, elle liste tout le jour. */
+/** Une carte par jour : gros chiffre fin ; ouverte, elle liste tout le jour (simple fondu à l'ouverture). */
 export function DayCard({ day, isToday, open, stats, onToggle, onItemPress, animate, numberStyle }: Props) {
   const n = Number(day.day.slice(8, 10));
   const label = isToday ? `${shortDayLabel(day.day)} · aujourd'hui` : shortDayLabel(day.day);
@@ -30,7 +28,7 @@ export function DayCard({ day, isToday, open, stats, onToggle, onItemPress, anim
   if (!open) {
     const summary = day.items.slice(0, 2);
     return (
-      <Animated.View layout={layout}>
+      <View>
         <Pressable
           onPress={onToggle}
           accessibilityRole="button"
@@ -53,7 +51,7 @@ export function DayCard({ day, isToday, open, stats, onToggle, onItemPress, anim
             )}
           </View>
         </Pressable>
-      </Animated.View>
+      </View>
     );
   }
 
@@ -66,7 +64,7 @@ export function DayCard({ day, isToday, open, stats, onToggle, onItemPress, anim
     : [`${day.items.length} élément${day.items.length > 1 ? 's' : ''}`];
 
   return (
-    <Animated.View layout={layout} entering={animate ? FadeIn.duration(200) : undefined} style={styles.open}>
+    <Animated.View entering={animate ? FadeIn.duration(160) : undefined} style={styles.open}>
       <Pressable
         onPress={onToggle}
         accessibilityRole="button"
@@ -94,9 +92,9 @@ export function DayCard({ day, isToday, open, stats, onToggle, onItemPress, anim
           </View>
         )}
         {day.items.map((it, i) => (
-          <Animated.View key={it.key} entering={animate ? FadeInRight.delay(40 + i * 40).duration(250) : undefined}>
+          <View key={it.key}>
             <ItemRow item={it} onPress={onItemPress} />
-          </Animated.View>
+          </View>
         ))}
       </View>
     </Animated.View>

@@ -5,7 +5,6 @@ import { type FlatList, type LayoutChangeEvent, Pressable, StyleSheet, View } fr
 import Animated, {
   FadeInDown,
   interpolateColor,
-  LinearTransition,
   type SharedValue,
   useAnimatedScrollHandler,
   useAnimatedStyle,
@@ -191,8 +190,6 @@ export function ListView({ switcher }: { switcher: React.ReactNode }) {
           snapToOffsets={tops.slice(0, -1)}
           decelerationRate="fast"
           showsVerticalScrollIndicator={false}
-          // Les jours du dessous glissent quand un jour s'ouvre.
-          itemLayoutAnimation={LinearTransition.duration(220)}
           // En remontant : on ajoute des jours passés sans que la liste saute.
           maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
           onStartReached={() => setRange((r) => ({ ...r, from: shiftDay(r.from, -CHUNK) }))}
