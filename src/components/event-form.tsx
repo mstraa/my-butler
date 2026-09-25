@@ -289,14 +289,16 @@ export function EventForm({ title, initial, categories, onSave, onDelete, readOn
             )}
           </Animated.View>
 
-          <View style={styles.note}>
-            <Icon name="info" size={16} color={colors.textTertiary} />
-            <AppText variant="caption" color={colors.textSecondary} style={{ flex: 1 }}>
-              {readOnlyNote ?? "Rendez-vous local : il n'est pas envoyé vers Google Agenda."}
-            </AppText>
-          </View>
+          {(!embedded || readOnlyNote) && (
+            <View style={styles.note}>
+              <Icon name="info" size={16} color={colors.textTertiary} />
+              <AppText variant="caption" color={colors.textSecondary} style={{ flex: 1 }}>
+                {readOnlyNote ?? "Rendez-vous local : il n'est pas envoyé vers Google Agenda."}
+              </AppText>
+            </View>
+          )}
 
-          {onDelete && (
+          {onDelete && !embedded && (
             <Pressable onPress={confirmDelete} accessibilityRole="button" style={styles.deleteBtn}>
               <Icon name="trash" size={18} color={colors.textSecondary} />
               <AppText variant="label" color={colors.textSecondary}>

@@ -19,7 +19,7 @@ import { AppText } from '@/components/app-text';
 import { EventForm } from '@/components/event-form';
 import { DeadlineSection, NoteField } from '@/components/event-parts';
 import { Icon, type IconName } from '@/components/icon';
-import { deleteEvent, duplicateEvent, type EventRecord, getCategories, getEvent, restoreEvent, updateEvent } from '@/db/events';
+import { duplicateEvent, type EventRecord, getCategories, getEvent, restoreEvent, updateEvent } from '@/db/events';
 import { useDbMutation, useDbQuery } from '@/db/use-query';
 import { dayOf } from '@/lib/dates';
 import {
@@ -47,7 +47,8 @@ export default function EventSheet() {
   const { id, day } = useLocalSearchParams<{ id: string; day?: string }>();
   const insets = useSafeAreaInsets();
   const { height: winH } = useWindowDimensions();
-  const FULL = winH - insets.top - 8; // hauteur de la feuille ouverte en grand
+  const FULL = winH - insets.top - 8; // hauteur de la feuille en détail
+  const TOP = insets.top + 8; // ce qu'elle gagne en plus en édition (pleine hauteur)
   const BOTTOM = Math.max(insets.bottom, 12) + 12;
   const FOOTER_H = 14 + 52 + 10 + 52 + BOTTOM; // Reporter / Dupliquer + Annuler
   const mutate = useDbMutation();
@@ -188,7 +189,14 @@ export default function EventSheet() {
     },
   });
 
-  const sheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: Math.max(0, ty.get()) }] }));
+  const sheetStyle = useAnimatedStyle(() => {
+    const k = editP.get();
+    return {
+      transform: [{ translateY: Math.max(0, ty.get()) + TOP * (1 - k) }],
+      borderTopLeftRadius: 30 * (1 - k),
+      borderTopRightRadius: 30 * (1 - k),
+    };
+  });
   const veilStyle = useAnimatedStyle(() => ({
     opacity: interpolate(ty.get(), [FULL - Math.max(previewH.get(), 1), FULL], [1, 0], 'clamp'),
   }));
@@ -237,8 +245,8 @@ export default function EventSheet() {
       </Animated.View>
 
       <GestureDetector gesture={pan}>
-        <Animated.View accessibilityViewIsModal style={[styles.sheet, { height: FULL }, sheetStyle]}>
-          <Animated.View style={[{ flex: 1 }, detailLayerStyle]} pointerEvents={edit ? 'none' : 'auto'}>
+        <Animated.View accessibilityViewIsModal style={[styles.sheet, { height: winH }, sheetStyle]}>
+          <Animated.View style={[{ height: FULL }, detailLayerStyle]} pointerEvents={edit ? 'none' : 'auto'}>
           <GestureDetector gesture={native}>
             <Animated.ScrollView
               onScroll={onScroll}
@@ -263,7 +271,6 @@ export default function EventSheet() {
               )}
             </Animated.ScrollView>
           </GestureDetector>
-          </Animated.View>
 
           {e && (
             <Animated.View pointerEvents="box-none" style={[styles.anchor, { height: FOOTER_H }, anchorStyle]}>
@@ -331,10 +338,11 @@ export default function EventSheet() {
               </Animated.View>
             </Animated.View>
           )}
+          </Animated.View>
 
-          {/* Édition : prolongement de la feuille. */}
+          {/* Édition : prolongement de la feuille, en pleine hauteur. */}
           {e && edit && (
-            <Animated.View style={[StyleSheet.absoluteFill, { paddingTop: 10 }, editLayerStyle]}>
+            <Animated.View style={[StyleSheet.absoluteFill, { paddingTop: insets.top + 6 }, editLayerStyle]}>
               <View style={styles.grabber} />
               <EventForm
                 key={editKey}
@@ -347,9 +355,6 @@ export default function EventSheet() {
                 }
                 onSave={async (draft) => {
                   await mutate((db) => updateEvent(db, e.id, draft));
-                }}
-                onDelete={async () => {
-                  await mutate((db) => deleteEvent(db, e.id));
                 }}
               />
             </Animated.View>
