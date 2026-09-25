@@ -14,6 +14,7 @@ import { colors, TAB_BAR_CLEARANCE } from '@/theme/tokens';
 
 const DAYS_BEFORE = 1;
 const DAYS_AFTER = 20;
+let listShown = false;
 
 /** Vue principale : les jours défilent, chacun se déplie ou se replie. */
 export function ListView({ switcher }: { switcher: React.ReactNode }) {
@@ -28,7 +29,14 @@ export function ListView({ switcher }: { switcher: React.ReactNode }) {
       getDayStats(db, today),
     ]);
     return { days, late, stats };
-  }, today);
+  }, today, { cacheId: 'liste' });
+  // Animation d'entrée des cartes : seulement au premier affichage de l'app, pas à chaque retour.
+  const [animateIn] = useState(() => {
+    const first = !listShown;
+    listShown = true;
+    return first;
+  });
+  const [toggled, setToggled] = useState(false);
 
   const lateCount = data?.late.length ?? 0;
 
@@ -53,7 +61,7 @@ export function ListView({ switcher }: { switcher: React.ReactNode }) {
         keyExtractor={(d) => d.day}
         ListHeaderComponent={
           lateCount > 0 ? (
-            <Animated.View entering={FadeInDown.duration(400)}>
+            <Animated.View entering={animateIn ? FadeInDown.duration(300) : undefined}>
               <Link href="/en-retard" asChild>
                 <Pressable accessibilityRole="button" style={styles.late}>
                   <View style={styles.lateDot} />
@@ -70,13 +78,17 @@ export function ListView({ switcher }: { switcher: React.ReactNode }) {
         }
         contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: TAB_BAR_CLEARANCE, gap: 8 }}
         renderItem={({ item, index }) => (
-          <Animated.View entering={FadeInDown.delay(Math.min(index, 6) * 70).duration(450)}>
+          <Animated.View entering={animateIn ? FadeInDown.delay(Math.min(index, 6) * 40).duration(300) : undefined}>
             <DayCard
               day={item}
               isToday={item.day === today}
               open={openDay === item.day}
               stats={item.day === today ? data?.stats : undefined}
-              onToggle={() => setOpenDay((cur) => (cur === item.day ? null : item.day))}
+              onToggle={() => {
+                setToggled(true);
+                setOpenDay((cur) => (cur === item.day ? null : item.day));
+              }}
+              animate={toggled}
               onItemPress={onItemPress}
             />
           </Animated.View>

@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import Animated, { FadeInDown, FadeInRight, ZoomIn } from 'react-native-reanimated';
+import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { ItemRow } from '@/components/agenda/day-card';
 import { PeriodHeader } from '@/components/agenda/period-header';
@@ -38,9 +38,9 @@ export function MonthView({ focus, direction, onShift, onSelect, onOpenDay, onTo
       getGoalRatios(db, grid[0], grid[grid.length - 1]),
     ]);
     return { key: month, agenda, ratios };
-  }, month);
+  }, month, { cacheId: 'mois' });
 
-  const { data: stats } = useDbQuery((db) => getDayStats(db, focus), focus);
+  const { data: stats } = useDbQuery((db) => getDayStats(db, focus), focus, { cacheId: 'stats' });
 
   const byDay = new Map((data?.agenda ?? []).map((d) => [d.day, d.items]));
   const selected = byDay.get(focus) ?? [];
@@ -79,7 +79,7 @@ export function MonthView({ focus, direction, onShift, onSelect, onOpenDay, onTo
               ))}
             </View>
             <View style={styles.grid}>
-              {grid.map((d, i) => {
+              {grid.map((d) => {
                 const inMonth = d.slice(0, 7) === month.slice(0, 7);
                 const items = byDay.get(d) ?? [];
                 const isToday = d === today;
@@ -87,7 +87,7 @@ export function MonthView({ focus, direction, onShift, onSelect, onOpenDay, onTo
                 const allGoals = d < today && (data?.ratios.get(d) ?? 0) >= 1;
                 const nEvents = items.filter((x) => x.kind === 'event' && !x.cancelled).length;
                 return (
-                  <Animated.View key={d} entering={ZoomIn.delay(100 + i * 10).duration(300)} style={styles.cell}>
+                  <View key={d} style={styles.cell}>
                     {inMonth ? (
                       <>
                         <Pressable
@@ -123,7 +123,7 @@ export function MonthView({ focus, direction, onShift, onSelect, onOpenDay, onTo
                         </AppText>
                       </View>
                     )}
-                  </Animated.View>
+                  </View>
                 );
               })}
             </View>
@@ -135,7 +135,7 @@ export function MonthView({ focus, direction, onShift, onSelect, onOpenDay, onTo
             <Legend swatch={<View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: '#2E2E33' }} />} label="Objectifs atteints" />
           </View>
 
-          <Animated.View key={focus} entering={FadeInDown.duration(350)} style={styles.summary} accessibilityLiveRegion="polite">
+          <Animated.View key={focus} entering={FadeIn.duration(150)} style={styles.summary} accessibilityLiveRegion="polite">
             <View style={styles.summaryHead}>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <AppText variant="title">{title}</AppText>
@@ -148,10 +148,8 @@ export function MonthView({ focus, direction, onShift, onSelect, onOpenDay, onTo
               </Pressable>
             </View>
             <View style={{ gap: 6 }}>
-              {selected.map((it, j) => (
-                <Animated.View key={it.key} entering={FadeInRight.delay(80 + j * 60).duration(350)}>
-                  <ItemRow item={it} onPress={onItemPress} />
-                </Animated.View>
+              {selected.map((it) => (
+                <ItemRow key={it.key} item={it} onPress={onItemPress} />
               ))}
               {selected.length === 0 && (
                 <Pressable

@@ -1,10 +1,11 @@
 import * as Haptics from 'expo-haptics';
-import { Link } from 'expo-router';
+import { router } from 'expo-router';
 import type { TabTriggerSlotProps } from 'expo-router/ui';
 import type { Ref } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useFabTone } from '@/components/fab-tone';
 import { Icon, type IconName } from '@/components/icon';
 import { colors } from '@/theme/tokens';
 
@@ -35,21 +36,23 @@ export function TabIconButton({ icon, label, isFocused, onPress, ...props }: Tab
 /** Conteneur flottant : pilule d'onglets à gauche, bouton + à droite. */
 export function FloatingTabBar({ children }: { children: React.ReactNode }) {
   const insets = useSafeAreaInsets();
+  const dark = useFabTone() === 'dark';
   return (
     <View pointerEvents="box-none" style={[styles.wrap, { bottom: Math.max(insets.bottom, 12) + 8 }]}>
       <View style={styles.pill}>{children}</View>
-      {/* Anneau sombre autour du bouton : il reste visible sur fond noir comme sur la feuille blanche. */}
-      <View style={styles.fabRing}>
-        <Link href="/ajouter" asChild>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Ajouter"
-            onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-            style={({ pressed }) => [styles.fab, pressed && { transform: [{ scale: 0.94 }] }]}>
-            <Icon name="plus" size={26} strokeWidth={2.4} color={colors.onLight} />
-          </Pressable>
-        </Link>
-      </View>
+      {/* Bouton + des maquettes : blanc sur fond noir, sombre au-dessus d'une feuille blanche. */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Ajouter"
+        onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+        onPress={() => router.push('/ajouter')}
+        style={({ pressed }) => [
+          styles.fab,
+          dark && styles.fabDark,
+          pressed && { transform: [{ scale: 0.94 }] },
+        ]}>
+        <Icon name="plus" size={24} strokeWidth={2} color={dark ? colors.text : colors.onLight} />
+      </Pressable>
     </View>
   );
 }
@@ -83,20 +86,14 @@ const styles = StyleSheet.create({
   },
   tab: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
   tabActive: { backgroundColor: colors.text },
-  fabRing: {
-    padding: 6,
-    borderRadius: 999,
-    backgroundColor: colors.pill,
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
-    ...shadow,
-  },
   fab: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     backgroundColor: colors.text,
     alignItems: 'center',
     justifyContent: 'center',
+    ...shadow,
   },
+  fabDark: { backgroundColor: colors.onLight },
 });

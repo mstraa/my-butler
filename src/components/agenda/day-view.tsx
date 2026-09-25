@@ -2,7 +2,8 @@ import { router } from 'expo-router';
 import { useEffect } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, {
-  FadeIn,
+  Easing,
+  Keyframe,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
@@ -11,6 +12,7 @@ import Animated, {
 
 import { PeriodHeader } from '@/components/agenda/period-header';
 import { SwipePager } from '@/components/agenda/swipe-pager';
+import { useDarkFab } from '@/components/fab-tone';
 import { useItemPress } from '@/components/agenda/use-item-press';
 import { AppText } from '@/components/app-text';
 import { Icon } from '@/components/icon';
@@ -39,7 +41,8 @@ export function DayView({ focus, direction, onShift, onPickDay, onToday, switche
   const { data } = useDbQuery(async (db) => {
     const [days, stats] = await Promise.all([getAgendaDays(db, week[0], week[6]), getDayStats(db, focus)]);
     return { key: focus, days, stats };
-  }, focus);
+  }, focus, { cacheId: 'jour' });
+  useDarkFab();
 
   const day = data?.days.find((d) => d.day === focus);
   const items = day?.items ?? [];
@@ -93,10 +96,8 @@ export function DayView({ focus, direction, onShift, onPickDay, onToday, switche
         })}
       </View>
 
-      <SwipePager pageKey={data?.key} direction={direction} onShift={onShift}>
-        <Animated.View
-          entering={direction === 0 ? FadeIn.duration(180) : undefined}
-          style={styles.sheet}>
+      {/* La feuille reste en place quand on change de jour : seul son contenu change. */}
+      <Animated.View entering={sheetEnter} style={styles.sheet}>
           <View style={styles.grabber} />
           <View style={styles.sheetHead}>
             <AppText variant="title" color={colors.sheetText} style={{ fontSize: 22 }}>
@@ -107,6 +108,7 @@ export function DayView({ focus, direction, onShift, onPickDay, onToday, switche
             </AppText>
           </View>
 
+        <SwipePager pageKey={data?.key} direction={direction} onShift={onShift}>
           <ScrollView contentContainerStyle={{ paddingBottom: TAB_BAR_CLEARANCE, paddingTop: 4 }}>
             {data && (
               <Timeline
@@ -115,13 +117,14 @@ export function DayView({ focus, direction, onShift, onPickDay, onToday, switche
                 now={now}
                 isToday={focus === today}
                 isPast={focus < today}
+                animate={direction === 0}
                 onItemPress={onItemPress}
                 onAdd={() => router.push({ pathname: '/rdv/nouveau', params: { day: focus } })}
               />
             )}
           </ScrollView>
-        </Animated.View>
-      </SwipePager>
+        </SwipePager>
+      </Animated.View>
     </View>
   );
 }
@@ -129,7 +132,7 @@ export function DayView({ focus, direction, onShift, onPickDay, onToday, switche
 type NodeState = 'past' | 'current' | 'future' | 'cancelled' | 'task' | 'taskDone' | 'birthday';
 
 function Timeline({
-  items, wokeAt, now, isToday, isPast, onItemPress, onAdd,
+  items, wokeAt, now, isToday, isPast, onItemPress, onAdd, animate,
 }: {
   items: AgendaItem[];
   wokeAt: string | null;
@@ -138,6 +141,7 @@ function Timeline({
   isPast: boolean;
   onItemPress: (i: AgendaItem) => void;
   onAdd: () => void;
+  animate: boolean;
 }) {
   const nowMin = minutesOf(timeOf(now));
 
@@ -166,7 +170,7 @@ function Timeline({
       {(items.length > 0 || wokeAt) && <View style={styles.rail} />}
       <View style={{ gap: 10 }}>
         {wokeAt && (
-          <Row delay={0} node={<DoneNode />}>
+          <Row animate={animate} delay={60} node={<DoneNode />}>
             <View style={[styles.card, styles.cardLight]}>
               <AppText variant="bodyStrong" color={colors.sheetTextSecondary} style={{ fontSize: 15, flex: 1 }}>
                 Levé
@@ -180,7 +184,7 @@ function Timeline({
         {items.map((it, i) => {
           const st = stateOf(it);
           return (
-            <Row key={it.key} delay={Math.min(i + 1, 6) * 25} node={<Node state={st} color={it.color} />}>
+            <Row key={it.key} animate={animate} delay={60 + Math.min(i + 1, 8) * 30} node={<Node state={st} color={it.color} />}>
               <ItemCard item={it} state={st} remaining={st === 'current' ? remaining(it) : ''} onPress={() => onItemPress(it)} />
             </Row>
           );
@@ -188,7 +192,7 @@ function Timeline({
       </View>
 
       {items.length === 0 && (
-        <Animated.View entering={FadeIn.delay(80).duration(180)} style={styles.empty}>
+        <Animated.View entering={animate ? rowEnter(80) : undefined} style={styles.empty}>
           <AppText variant="bodyMedium" color={colors.sheetTextSecondary}>
             Rien de prévu
           </AppText>
@@ -204,9 +208,9 @@ function Timeline({
   );
 }
 
-function Row({ delay, node, children }: { delay: number; node: React.ReactNode; children: React.ReactNode }) {
+function Row({ delay, node, animate, children }: { delay: number; node: React.ReactNode; animate: boolean; children: React.ReactNode }) {
   return (
-    <Animated.View entering={FadeIn.delay(delay).duration(180)} style={{ flexDirection: 'row', gap: 16 }}>
+    <Animated.View entering={animate ? rowEnter(delay) : undefined} style={{ flexDirection: 'row', gap: 16 }}>
       <View style={{ width: 16, paddingTop: 16, alignItems: 'center' }}>{node}</View>
       <View style={{ flex: 1, minWidth: 0 }}>{children}</View>
     </Animated.View>
@@ -319,6 +323,21 @@ function PulseNode({ color }: { color: string }) {
     </View>
   );
 }
+
+/* Entrées discrètes : la feuille monte de 28 px (260 ms), chaque ligne de 8 px (220 ms). */
+const ease = Easing.bezier(0.2, 0.8, 0.2, 1);
+const sheetEnter = new Keyframe({
+  0: { opacity: 0, transform: [{ translateY: 28 }] },
+  100: { opacity: 1, transform: [{ translateY: 0 }], easing: ease },
+}).duration(260);
+// Une instance par ligne : Keyframe.delay() modifie l'objet.
+const rowEnter = (delay: number) =>
+  new Keyframe({
+    0: { opacity: 0, transform: [{ translateY: 8 }] },
+    100: { opacity: 1, transform: [{ translateY: 0 }], easing: ease },
+  })
+    .duration(220)
+    .delay(delay);
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 

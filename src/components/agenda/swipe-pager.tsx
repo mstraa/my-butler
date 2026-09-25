@@ -1,17 +1,9 @@
-import { useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, {
-  FadeIn,
-  SlideInLeft,
-  SlideInRight,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-} from 'react-native-reanimated';
+import Animated, { Easing, Keyframe } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
 type Props = {
-  /** Identifie la période affichée : quand il change, la nouvelle page entre en glissant. */
+  /** Identifie la période affichée : quand il change, la nouvelle page apparaît. */
   pageKey: string | undefined;
   /** Sens du dernier changement : -1 vers le passé, +1 vers le futur, 0 sinon. */
   direction: -1 | 0 | 1;
@@ -19,8 +11,19 @@ type Props = {
   children: React.ReactNode;
 };
 
-const THRESHOLD = 70;
-const VELOCITY = 600;
+const THRESHOLD = 60;
+const VELOCITY = 500;
+const ease = Easing.bezier(0.2, 0.8, 0.2, 1);
+
+/* Entrée discrète : 12 px de glissement + fondu, 160 ms. Rien ne suit le doigt. */
+const fromRight = new Keyframe({
+  0: { opacity: 0, transform: [{ translateX: 12 }] },
+  100: { opacity: 1, transform: [{ translateX: 0 }], easing: ease },
+}).duration(160);
+const fromLeft = new Keyframe({
+  0: { opacity: 0, transform: [{ translateX: -12 }] },
+  100: { opacity: 1, transform: [{ translateX: 0 }], easing: ease },
+}).duration(160);
 
 /**
  * Balayage gauche/droite pour changer de période (Jour, Semaine, Mois).
@@ -28,43 +31,21 @@ const VELOCITY = 600;
  * défiler verticalement les listes à l'intérieur.
  */
 export function SwipePager({ pageKey, direction, onShift, children }: Props) {
-  const { width } = useWindowDimensions();
-  const tx = useSharedValue(0);
-
   const pan = Gesture.Pan()
     .activeOffsetX([-20, 20])
     .failOffsetY([-14, 14])
-    .onUpdate((e) => {
-      tx.value = e.translationX * 0.5;
-    })
     .onEnd((e) => {
-      const go = Math.abs(e.translationX) > THRESHOLD || Math.abs(e.velocityX) > VELOCITY;
-      if (go) {
-        tx.value = 0;
+      if (Math.abs(e.translationX) > THRESHOLD || Math.abs(e.velocityX) > VELOCITY) {
         scheduleOnRN(onShift, e.translationX < 0 ? 1 : -1);
-      } else {
-        tx.value = withSpring(0, { damping: 20, stiffness: 220 });
       }
     });
 
-  const style = useAnimatedStyle(() => ({
-    transform: [{ translateX: tx.value }],
-    opacity: 1 - Math.min(Math.abs(tx.value) / width, 0.35),
-  }));
-
-  const entering =
-    direction === 1
-      ? SlideInRight.springify().damping(24).stiffness(240)
-      : direction === -1
-        ? SlideInLeft.springify().damping(24).stiffness(240)
-        : FadeIn.duration(200);
+  const entering = direction === 1 ? fromRight : direction === -1 ? fromLeft : undefined;
 
   return (
     <GestureDetector gesture={pan}>
-      <Animated.View style={[{ flex: 1 }, style]}>
-        <Animated.View key={pageKey ?? 'loading'} entering={entering} style={{ flex: 1 }}>
-          {children}
-        </Animated.View>
+      <Animated.View key={pageKey} entering={pageKey ? entering : undefined} style={{ flex: 1 }}>
+        {children}
       </Animated.View>
     </GestureDetector>
   );

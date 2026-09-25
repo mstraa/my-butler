@@ -14,12 +14,14 @@ type Props = {
   stats?: DayStats;
   onToggle: () => void;
   onItemPress?: (item: AgendaItem) => void;
+  /** Animer l'ouverture (seulement après un toucher, pas à l'affichage). */
+  animate?: boolean;
 };
 
 const layout = LinearTransition.springify().damping(22).stiffness(220);
 
 /** Une carte par jour : gros chiffre fin ; ouverte, elle liste tout le jour. */
-export function DayCard({ day, isToday, open, stats, onToggle, onItemPress }: Props) {
+export function DayCard({ day, isToday, open, stats, onToggle, onItemPress, animate }: Props) {
   const n = Number(day.day.slice(8, 10));
   const label = isToday ? `${shortDayLabel(day.day)} · aujourd'hui` : shortDayLabel(day.day);
 
@@ -64,7 +66,7 @@ export function DayCard({ day, isToday, open, stats, onToggle, onItemPress }: Pr
     : [`${day.items.length} élément${day.items.length > 1 ? 's' : ''}`];
 
   return (
-    <Animated.View layout={layout} entering={FadeIn.duration(250)} style={styles.open}>
+    <Animated.View layout={layout} entering={animate ? FadeIn.duration(200) : undefined} style={styles.open}>
       <Pressable
         onPress={onToggle}
         accessibilityRole="button"
@@ -92,7 +94,7 @@ export function DayCard({ day, isToday, open, stats, onToggle, onItemPress }: Pr
           </View>
         )}
         {day.items.map((it, i) => (
-          <Animated.View key={it.key} entering={FadeInRight.delay(80 + i * 60).duration(350)}>
+          <Animated.View key={it.key} entering={animate ? FadeInRight.delay(40 + i * 40).duration(250) : undefined}>
             <ItemRow item={it} onPress={onItemPress} />
           </Animated.View>
         ))}

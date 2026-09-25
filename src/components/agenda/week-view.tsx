@@ -1,5 +1,5 @@
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import Animated, { FadeIn, ZoomIn } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 
 import { PeriodHeader } from '@/components/agenda/period-header';
 import { SwipePager } from '@/components/agenda/swipe-pager';
@@ -35,7 +35,7 @@ export function WeekView({ focus, direction, onShift, onPickDay, onToday, switch
   const { data } = useDbQuery(async (db) => {
     const [agenda, ratios] = await Promise.all([getAgendaDays(db, days[0], days[6]), getGoalRatios(db, days[0], days[6])]);
     return { key: days[0], agenda, ratios };
-  }, days[0]);
+  }, days[0], { cacheId: 'semaine' });
 
   // Plage horaire : 8 h – 20 h, élargie si un rdv en sort.
   let minH = 8;
@@ -123,7 +123,7 @@ export function WeekView({ focus, direction, onShift, onPickDay, onToday, switch
                     {blocks.map((b, j) => (
                       <Animated.View
                         key={b.item.key}
-                        entering={ZoomIn.delay(120 + i * 50 + j * 40).duration(350)}
+                        
                         style={{
                           position: 'absolute',
                           top: b.top,
@@ -136,7 +136,7 @@ export function WeekView({ focus, direction, onShift, onPickDay, onToday, switch
                       </Animated.View>
                     ))}
                     {isToday && showNow && (
-                      <Animated.View entering={FadeIn.delay(600)} pointerEvents="none" style={[styles.nowLine, { top: nowTop }]}>
+                      <Animated.View pointerEvents="none" style={[styles.nowLine, { top: nowTop }]}>
                         <View style={styles.nowDot} />
                       </Animated.View>
                     )}

@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, View } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { AppText } from '@/components/app-text';
 import { Icon } from '@/components/icon';
@@ -28,7 +28,7 @@ export function PeriodHeader({ title, titleMuted, subtitle, prevLabel, nextLabel
         accessibilityRole={onToday ? 'button' : 'header'}
         accessibilityHint={onToday ? "Revenir à aujourd'hui" : undefined}
         style={styles.center}>
-        <Animated.View key={title} entering={FadeInDown.duration(300)} style={{ alignItems: 'center' }}>
+        <Animated.View key={title} entering={FadeIn.duration(150)} style={{ alignItems: 'center' }}>
           <AppText variant="display" style={{ fontSize: subtitle ? 24 : 26, lineHeight: subtitle ? 28 : 32 }} numberOfLines={1}>
             {title}
             {titleMuted ? <AppText variant="display" color={colors.textTertiary}>{` ${titleMuted}`}</AppText> : null}
