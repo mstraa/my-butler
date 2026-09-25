@@ -1,19 +1,22 @@
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useRef } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { ScrollView } from 'react-native-gesture-handler';
 import Animated from 'react-native-reanimated';
 
+import { type CarouselHandle, PeriodCarousel } from '@/components/agenda/period-carousel';
 import { PeriodHeader } from '@/components/agenda/period-header';
-import { SwipePager } from '@/components/agenda/swipe-pager';
 import { useItemPress } from '@/components/agenda/use-item-press';
 import { AppText } from '@/components/app-text';
 import { type AgendaItem, getAgendaDays, getGoalRatios } from '@/db/agenda';
 import { useDbQuery } from '@/db/use-query';
-import { dayOf, isoWeek, minutesOf, timeOf, todayKey, weekDays, weekdayShort, weekRangeLabel } from '@/lib/dates';
+import {
+  dayOf, isoWeek, minutesOf, timeOf, todayKey, weekDays, weekdayShort, weekFromIndex, weekIndex, weekRangeLabel,
+} from '@/lib/dates';
 import { useNow } from '@/lib/use-now';
 import { colors, fonts, TAB_BAR_CLEARANCE, withAlpha } from '@/theme/tokens';
 
 type Props = {
   focus: string;
-  direction: -1 | 0 | 1;
   onShift: (dir: -1 | 1) => void;
   onPickDay: (day: string) => void;
   onToday: () => void;
@@ -25,16 +28,44 @@ const HOURS_COL = 28;
 
 type Block = { item: AgendaItem; top: number; height: number; lane: number; lanes: number };
 
-/** Vue Semaine : grille horaire des 7 jours, barre d'objectifs sous chaque jour. */
-export function WeekView({ focus, direction, onShift, onPickDay, onToday, switcher }: Props) {
+/** Vue Semaine : grille horaire des 7 jours, qui suit le doigt d'une semaine à l'autre. */
+export function WeekView({ focus, onShift, onPickDay, onToday, switcher }: Props) {
+  const today = todayKey();
+  const carousel = useRef<CarouselHandle>(null);
+  const days = weekDays(focus);
+
+  return (
+    <View style={{ flex: 1 }}>
+      <PeriodHeader
+        title={weekRangeLabel(focus)}
+        subtitle={`Semaine ${isoWeek(focus)}`}
+        prevLabel="Semaine précédente"
+        nextLabel="Semaine suivante"
+        onShift={(dir) => carousel.current?.slide(dir)}
+        onToday={days.includes(today) ? undefined : onToday}
+      />
+      {switcher}
+
+      <PeriodCarousel
+        ref={carousel}
+        index={weekIndex(focus)}
+        onShift={onShift}
+        renderPage={(i) => <WeekPage weekStart={weekFromIndex(i)} onPickDay={onPickDay} />}
+      />
+    </View>
+  );
+}
+
+/** Une semaine : en-têtes des jours + grille horaire. Chaque page charge ses données. */
+function WeekPage({ weekStart, onPickDay }: { weekStart: string; onPickDay: (day: string) => void }) {
   const today = todayKey();
   const now = useNow();
-  const days = weekDays(focus);
+  const days = weekDays(weekStart);
   const onItemPress = useItemPress();
 
   const { data } = useDbQuery(async (db) => {
     const [agenda, ratios] = await Promise.all([getAgendaDays(db, days[0], days[6]), getGoalRatios(db, days[0], days[6])]);
-    return { key: days[0], agenda, ratios };
+    return { agenda, ratios };
   }, days[0], { cacheId: 'semaine' });
 
   // Plage horaire : 8 h – 20 h, élargie si un rdv en sort.
@@ -54,18 +85,6 @@ export function WeekView({ focus, direction, onShift, onPickDay, onToday, switch
   const showNow = days.includes(dayOf(now)) && nowTop >= 0 && nowTop <= hours.length * HOUR;
 
   return (
-    <View style={{ flex: 1 }}>
-      <PeriodHeader
-        title={weekRangeLabel(focus)}
-        subtitle={`Semaine ${isoWeek(focus)}`}
-        prevLabel="Semaine précédente"
-        nextLabel="Semaine suivante"
-        onShift={onShift}
-        onToday={days.includes(today) ? undefined : onToday}
-      />
-      {switcher}
-
-      <SwipePager pageKey={data?.key} direction={direction} onShift={onShift}>
         <View style={styles.card}>
           {/* En-têtes des jours */}
           <View style={styles.headRow}>
@@ -146,8 +165,6 @@ export function WeekView({ focus, direction, onShift, onPickDay, onToday, switch
             </View>
           </ScrollView>
         </View>
-      </SwipePager>
-    </View>
   );
 }
 

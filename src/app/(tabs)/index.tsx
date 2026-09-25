@@ -33,6 +33,11 @@ export default function AgendaScreen() {
     setFocus(day);
     setView('jour');
   };
+  const shiftWeek = (dir: -1 | 1) => {
+    Haptics.selectionAsync();
+    setDirection(dir);
+    setFocus((f) => shiftDay(f, 7 * dir));
+  };
   const pickInDay = (day: string) => {
     if (day === focus) return;
     setDirection(day > focus ? 1 : -1);
@@ -49,15 +54,22 @@ export default function AgendaScreen() {
     <Screen>
       {view === 'liste' && <ListView switcher={switcher} />}
       {view === 'jour' && (
-        <DayView focus={focus} direction={direction} onShift={shift} onPickDay={pickInDay} onToday={goToday} switcher={switcher} />
+        <DayView
+          focus={focus}
+          direction={direction}
+          onShift={shift}
+          onShiftWeek={shiftWeek}
+          onPickDay={pickInDay}
+          onToday={goToday}
+          switcher={switcher}
+        />
       )}
       {view === 'semaine' && (
-        <WeekView focus={focus} direction={direction} onShift={shift} onPickDay={openDay} onToday={goToday} switcher={switcher} />
+        <WeekView focus={focus} onShift={shift} onPickDay={openDay} onToday={goToday} switcher={switcher} />
       )}
       {view === 'mois' && (
         <MonthView
           focus={focus}
-          direction={direction}
           onShift={shift}
           onSelect={(d) => {
             setDirection(0);

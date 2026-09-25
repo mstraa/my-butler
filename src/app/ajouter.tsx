@@ -1,9 +1,11 @@
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
-import { useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
-import Animated, { FadeIn, FadeInDown, SlideInDown, ZoomIn } from 'react-native-reanimated';
+import { useEffect, useState } from 'react';
+import { BackHandler, Pressable, StyleSheet, View } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, { Easing, FadeInDown, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { scheduleOnRN } from 'react-native-worklets';
 
 import { AppText } from '@/components/app-text';
 import { Icon, type IconName } from '@/components/icon';
@@ -33,6 +35,55 @@ export default function AddSheet() {
   const mutate = useDbMutation();
   const { data: stats } = useDbQuery((db) => getDayStats(db, today), today);
   const [toast, setToast] = useState<{ text: string; n: number } | null>(null);
+
+  /* Animation : p va de 0 (fermée) à 1 (ouverte) ; drag = glissement du doigt vers le bas. */
+  const p = useSharedValue(0);
+  const drag = useSharedValue(0);
+  const height = useSharedValue(600);
+  const closing = useSharedValue(false);
+
+  useEffect(() => {
+    p.set(withTiming(1, { duration: 280, easing: ease }));
+  }, [p]);
+
+  /** Referme la feuille (200 ms), puis quitte l'écran ou ouvre la suite. */
+  const close = (then: () => void = () => router.back()) => {
+    if (closing.get()) return;
+    closing.set(true);
+    p.set(withTiming(0, { duration: 200, easing: easeIn }, (finished) => {
+      if (finished) scheduleOnRN(then);
+    }));
+  };
+
+  // Bouton retour d'Android : même fermeture animée.
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      close();
+      return true;
+    });
+    return () => sub.remove();
+  });
+
+  const pan = Gesture.Pan()
+    .activeOffsetY(8)
+    .failOffsetX([-16, 16])
+    .onUpdate((e) => {
+      drag.set(Math.max(0, e.translationY));
+    })
+    .onEnd((e) => {
+      if (drag.get() > height.get() * 0.25 || e.velocityY > 800) {
+        scheduleOnRN(close);
+      } else {
+        drag.set(withTiming(0, { duration: 200, easing: ease }));
+      }
+    });
+
+  const sheetStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: (1 - p.get()) * height.get() + drag.get() }],
+  }));
+  const veilStyle = useAnimatedStyle(() => ({
+    opacity: p.get() * (1 - Math.min(drag.get() / Math.max(height.get(), 1), 1)),
+  }));
 
   const show = (text: string) => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -71,14 +122,17 @@ export default function AddSheet() {
 
   return (
     <View style={{ flex: 1 }}>
-      <Animated.View entering={FadeIn.duration(300)} style={StyleSheet.absoluteFill}>
-        <Pressable accessibilityLabel="Fermer" onPress={() => router.back()} style={styles.veil} />
+      <Animated.View style={[StyleSheet.absoluteFill, veilStyle]}>
+        <Pressable accessibilityLabel="Fermer" onPress={() => close()} style={styles.veil} />
       </Animated.View>
 
+      <GestureDetector gesture={pan}>
       <Animated.View
-        entering={SlideInDown.springify().damping(24).stiffness(220)}
         accessibilityViewIsModal
-        style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 12) + 16 }]}>
+        onLayout={(e) => {
+          height.set(e.nativeEvent.layout.height);
+        }}
+        style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 12) + 16 }, sheetStyle]}>
         <View style={styles.grabber} />
         <View style={styles.titleRow}>
           <AppText variant="display" style={{ fontFamily: fonts.displayMedium, fontSize: 28 }}>
@@ -90,11 +144,15 @@ export default function AddSheet() {
         </View>
 
         <View style={styles.grid}>
-          {TILES.map((t, i) => (
-            <Animated.View key={t.label} entering={ZoomIn.delay(180 + i * 45).duration(350)} style={styles.tileWrap}>
+          {TILES.map((t) => (
+            <View key={t.label} style={styles.tileWrap}>
               <Pressable
                 accessibilityRole="button"
-                onPress={() => (t.href ? router.replace(t.href) : router.replace({ pathname: '/a-venir', params: { titre: t.label } }))}
+                onPress={() =>
+                  close(() =>
+                    t.href ? router.replace(t.href) : router.replace({ pathname: '/a-venir', params: { titre: t.label } }),
+                  )
+                }
                 style={({ pressed }) => [styles.tile, pressed && { backgroundColor: '#2A2A2F' }]}>
                 <View style={[styles.tileIcon, { backgroundColor: withAlpha(t.color, 0.13) }]}>
                   <Icon name={t.icon} size={16} color={t.color} />
@@ -103,11 +161,11 @@ export default function AddSheet() {
                   {t.label}
                 </AppText>
               </Pressable>
-            </Animated.View>
+            </View>
           ))}
         </View>
 
-        <Animated.View entering={FadeInDown.delay(600).duration(400)} style={{ gap: 10 }}>
+        <View style={{ gap: 10 }}>
           <View style={styles.quickHead}>
             <AppText variant="label" color={colors.textSecondary}>
               Saisie rapide
@@ -135,11 +193,15 @@ export default function AddSheet() {
               </Pressable>
             ))}
           </View>
-        </Animated.View>
+        </View>
       </Animated.View>
+      </GestureDetector>
     </View>
   );
 }
+
+const ease = Easing.bezier(0.2, 0.8, 0.2, 1);
+const easeIn = Easing.bezier(0.4, 0, 1, 1);
 
 const fmtMl = (ml: number) => `${String(ml).replace('.', ',')} ml`;
 

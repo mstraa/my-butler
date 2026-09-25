@@ -1,4 +1,4 @@
-import { addDays, addMonths, endOfMonth, format, getISOWeek, parse, startOfWeek } from 'date-fns';
+import { addDays, addMonths, differenceInCalendarDays, endOfMonth, format, getISOWeek, parse, startOfWeek } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
 /**
@@ -84,3 +84,14 @@ export function weekRangeLabel(k: DayKey) {
 
 /** Minutes depuis minuit d'un 'HH:mm'. */
 export const minutesOf = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
+
+/* ——— Index absolus de périodes (carrousels) ——— */
+
+const EPOCH_MONDAY = '1970-01-05';
+/** Numéro de la semaine depuis 1970 (0 = semaine du lundi 5 janvier 1970). */
+export const weekIndex = (k: DayKey) =>
+  Math.round(differenceInCalendarDays(parseDay(weekStart(k)), parseDay(EPOCH_MONDAY)) / 7);
+export const weekFromIndex = (i: number) => shiftDay(EPOCH_MONDAY, i * 7);
+/** Numéro du mois (année × 12 + mois). */
+export const monthIndex = (k: DayKey) => Number(k.slice(0, 4)) * 12 + Number(k.slice(5, 7)) - 1;
+export const monthFromIndex = (i: number) => `${Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, '0')}-01`;

@@ -11,6 +11,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { PeriodHeader } from '@/components/agenda/period-header';
+import { PeriodCarousel } from '@/components/agenda/period-carousel';
 import { SwipePager } from '@/components/agenda/swipe-pager';
 import { useDarkFab } from '@/components/fab-tone';
 import { useItemPress } from '@/components/agenda/use-item-press';
@@ -18,7 +19,9 @@ import { AppText } from '@/components/app-text';
 import { Icon } from '@/components/icon';
 import { type AgendaItem, getAgendaDays, getDayStats } from '@/db/agenda';
 import { useDbQuery } from '@/db/use-query';
-import { dayOf, longDayTitle, minutesOf, monthName, timeOf, todayKey, weekDays, weekdayShort } from '@/lib/dates';
+import {
+  dayOf, longDayTitle, minutesOf, monthName, timeOf, todayKey, weekDays, weekdayShort, weekFromIndex, weekIndex,
+} from '@/lib/dates';
 import { useNow } from '@/lib/use-now';
 import { colors, fonts, TAB_BAR_CLEARANCE, withAlpha } from '@/theme/tokens';
 
@@ -26,20 +29,21 @@ type Props = {
   focus: string;
   direction: -1 | 0 | 1;
   onShift: (dir: -1 | 1) => void;
+  /** Balayage de la bande des jours : semaine précédente / suivante. */
+  onShiftWeek: (dir: -1 | 1) => void;
   onPickDay: (day: string) => void;
   onToday: () => void;
   switcher: React.ReactNode;
 };
 
 /** Vue Jour : bande de la semaine + timeline du jour sur une feuille blanche. */
-export function DayView({ focus, direction, onShift, onPickDay, onToday, switcher }: Props) {
+export function DayView({ focus, direction, onShift, onShiftWeek, onPickDay, onToday, switcher }: Props) {
   const today = todayKey();
   const now = useNow();
-  const week = weekDays(focus);
   const onItemPress = useItemPress();
 
   const { data } = useDbQuery(async (db) => {
-    const [days, stats] = await Promise.all([getAgendaDays(db, week[0], week[6]), getDayStats(db, focus)]);
+    const [days, stats] = await Promise.all([getAgendaDays(db, focus, focus), getDayStats(db, focus)]);
     return { key: focus, days, stats };
   }, focus, { cacheId: 'jour' });
   useDarkFab();
@@ -70,30 +74,13 @@ export function DayView({ focus, direction, onShift, onPickDay, onToday, switche
       />
       {switcher}
 
-      <View style={styles.strip}>
-        {week.map((d) => {
-          const on = d === focus;
-          const first = data?.days.find((x) => x.day === d)?.items.find((i) => !i.cancelled);
-          return (
-            <Pressable
-              key={d}
-              onPress={() => onPickDay(d)}
-              accessibilityRole="button"
-              accessibilityState={{ selected: on }}
-              accessibilityLabel={`${longDayTitle(d)}${d === today ? ", aujourd'hui" : ''}`}
-              style={[styles.stripDay, on && styles.stripDayOn]}>
-              <AppText variant="caption" color={on ? '#4A4A4F' : colors.textTertiary}>
-                {cap(weekdayShort(d).replace('.', ''))}
-              </AppText>
-              <AppText
-                style={{ fontFamily: on ? fonts.bodyBold : fonts.bodySemiBold, fontSize: 17 }}
-                color={on ? colors.onLight : colors.text}>
-                {Number(d.slice(8, 10))}
-              </AppText>
-              <View style={[styles.stripDot, { backgroundColor: on ? colors.onLight : first ? first.color : 'transparent' }]} />
-            </Pressable>
-          );
-        })}
+      {/* Bande des jours : elle suit le doigt d'une semaine à l'autre. */}
+      <View style={{ height: STRIP_HEIGHT }}>
+        <PeriodCarousel
+          index={weekIndex(focus)}
+          onShift={onShiftWeek}
+          renderPage={(i) => <WeekStrip weekStart={weekFromIndex(i)} focus={focus} onPickDay={onPickDay} />}
+        />
       </View>
 
       {/* La feuille reste en place quand on change de jour : seul son contenu change. */}
@@ -313,13 +300,47 @@ function DoneNode() {
 function PulseNode({ color }: { color: string }) {
   const p = useSharedValue(0);
   useEffect(() => {
-    p.value = withRepeat(withTiming(1, { duration: 2200 }), -1, false);
+    p.set(withRepeat(withTiming(1, { duration: 2200 }), -1, false));
   }, [p]);
-  const halo = useAnimatedStyle(() => ({ opacity: 0.3 * (1 - p.value), transform: [{ scale: 1 + p.value * 0.8 }] }));
+  const halo = useAnimatedStyle(() => ({ opacity: 0.3 * (1 - p.get()), transform: [{ scale: 1 + p.get() * 0.8 }] }));
   return (
     <View style={{ width: 16, height: 16, alignItems: 'center', justifyContent: 'center' }}>
       <Animated.View style={[{ position: 'absolute', width: 16, height: 16, borderRadius: 8, backgroundColor: color }, halo]} />
       <View style={[styles.node, { backgroundColor: color, borderWidth: 3, borderColor: '#fff' }]} />
+    </View>
+  );
+}
+
+const STRIP_HEIGHT = 76;
+
+/** Les 7 jours d'une semaine, avec un point de la couleur du premier élément de chaque jour. */
+function WeekStrip({ weekStart, focus, onPickDay }: { weekStart: string; focus: string; onPickDay: (d: string) => void }) {
+  const today = todayKey();
+  const week = weekDays(weekStart);
+  const { data } = useDbQuery((db) => getAgendaDays(db, week[0], week[6]), week[0], { cacheId: 'bande' });
+  return (
+    <View style={styles.strip}>
+      {week.map((d) => {
+        const on = d === focus;
+        const first = data?.find((x) => x.day === d)?.items.find((i) => !i.cancelled);
+        return (
+          <Pressable
+            key={d}
+            onPress={() => onPickDay(d)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: on }}
+            accessibilityLabel={`${longDayTitle(d)}${d === today ? ", aujourd'hui" : ''}`}
+            style={[styles.stripDay, on && styles.stripDayOn]}>
+            <AppText variant="caption" color={on ? '#4A4A4F' : colors.textTertiary}>
+              {cap(weekdayShort(d).replace('.', ''))}
+            </AppText>
+            <AppText style={{ fontFamily: on ? fonts.bodyBold : fonts.bodySemiBold, fontSize: 17 }} color={on ? colors.onLight : colors.text}>
+              {Number(d.slice(8, 10))}
+            </AppText>
+            <View style={[styles.stripDot, { backgroundColor: on ? colors.onLight : first ? first.color : 'transparent' }]} />
+          </Pressable>
+        );
+      })}
     </View>
   );
 }

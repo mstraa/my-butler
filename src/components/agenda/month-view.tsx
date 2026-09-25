@@ -1,21 +1,24 @@
 import { router } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useRef } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { ScrollView } from 'react-native-gesture-handler';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { ItemRow } from '@/components/agenda/day-card';
+import { type CarouselHandle, PeriodCarousel } from '@/components/agenda/period-carousel';
 import { PeriodHeader } from '@/components/agenda/period-header';
-import { SwipePager } from '@/components/agenda/swipe-pager';
 import { useItemPress } from '@/components/agenda/use-item-press';
 import { AppText } from '@/components/app-text';
 import { Icon } from '@/components/icon';
 import { getAgendaDays, getDayStats, getGoalRatios } from '@/db/agenda';
 import { useDbQuery } from '@/db/use-query';
-import { mediumDayLabel, monthGrid, monthName, monthStart, shortDayLabel, todayKey, yearOf } from '@/lib/dates';
+import {
+  mediumDayLabel, monthFromIndex, monthGrid, monthIndex, monthName, monthStart, shortDayLabel, todayKey, yearOf,
+} from '@/lib/dates';
 import { colors, fonts, TAB_BAR_CLEARANCE } from '@/theme/tokens';
 
 type Props = {
   focus: string;
-  direction: -1 | 0 | 1;
   onShift: (dir: -1 | 1) => void;
   onSelect: (day: string) => void;
   onOpenDay: (day: string) => void;
@@ -24,26 +27,22 @@ type Props = {
 };
 
 const LETTERS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+const CELL = 50;
+// Hauteur fixe du carrousel : 6 semaines au plus (les mois de 5 semaines laissent une ligne vide).
+const GRID_HEIGHT = 8 + 26 + 6 * CELL + 6 + 2;
 
-/** Vue Mois : jours en pastilles, résumé du jour choisi sous la grille. */
-export function MonthView({ focus, direction, onShift, onSelect, onOpenDay, onToday, switcher }: Props) {
+/** Vue Mois : la grille suit le doigt d'un mois à l'autre ; résumé du jour choisi dessous. */
+export function MonthView({ focus, onShift, onSelect, onOpenDay, onToday, switcher }: Props) {
   const today = todayKey();
-  const month = monthStart(focus);
-  const grid = monthGrid(focus);
+  const carousel = useRef<CarouselHandle>(null);
   const onItemPress = useItemPress();
 
   const { data } = useDbQuery(async (db) => {
-    const [agenda, ratios] = await Promise.all([
-      getAgendaDays(db, grid[0], grid[grid.length - 1]),
-      getGoalRatios(db, grid[0], grid[grid.length - 1]),
-    ]);
-    return { key: month, agenda, ratios };
-  }, month, { cacheId: 'mois' });
+    const [agenda, stats] = await Promise.all([getAgendaDays(db, focus, focus), getDayStats(db, focus)]);
+    return { items: agenda[0]?.items ?? [], stats };
+  }, focus, { cacheId: 'mois-jour' });
 
-  const { data: stats } = useDbQuery((db) => getDayStats(db, focus), focus, { cacheId: 'stats' });
-
-  const byDay = new Map((data?.agenda ?? []).map((d) => [d.day, d.items]));
-  const selected = byDay.get(focus) ?? [];
+  const selected = data?.items ?? [];
   const nRdv = selected.filter((i) => i.kind === 'event' && !i.cancelled).length;
   const nTask = selected.filter((i) => i.kind === 'task').length;
   const nBday = selected.filter((i) => i.kind === 'birthday').length;
@@ -53,7 +52,7 @@ export function MonthView({ focus, direction, onShift, onSelect, onOpenDay, onTo
     nBday ? `${nBday} anniversaire${nBday > 1 ? 's' : ''}` : null,
   ].filter(Boolean) as string[];
   const title = `${shortDayLabel(focus)}${parts.length ? ` · ${joinFr(parts)}` : ''}`;
-  const goals = stats?.goalsTotal ? ` · objectifs ${stats.goalsMet}/${stats.goalsTotal}` : '';
+  const goals = data?.stats.goalsTotal ? ` · objectifs ${data.stats.goalsMet}/${data.stats.goalsTotal}` : '';
   const sub = `${focus === today ? "Aujourd'hui" : mediumDayLabel(focus)}${goals}`;
 
   return (
@@ -63,109 +62,142 @@ export function MonthView({ focus, direction, onShift, onSelect, onOpenDay, onTo
         titleMuted={yearOf(focus)}
         prevLabel="Mois précédent"
         nextLabel="Mois suivant"
-        onShift={onShift}
-        onToday={monthStart(today) === month ? undefined : onToday}
+        onShift={(dir) => carousel.current?.slide(dir)}
+        onToday={monthStart(today) === monthStart(focus) ? undefined : onToday}
       />
       {switcher}
 
-      <SwipePager pageKey={data?.key} direction={direction} onShift={onShift}>
-        <ScrollView contentContainerStyle={{ paddingBottom: TAB_BAR_CLEARANCE }} showsVerticalScrollIndicator={false}>
-          <View style={styles.card}>
-            <View style={styles.letters} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-              {LETTERS.map((l, i) => (
-                <AppText key={i} variant="caption" style={styles.letter}>
-                  {l}
-                </AppText>
-              ))}
-            </View>
-            <View style={styles.grid}>
-              {grid.map((d) => {
-                const inMonth = d.slice(0, 7) === month.slice(0, 7);
-                const items = byDay.get(d) ?? [];
-                const isToday = d === today;
-                const isSel = d === focus && !isToday;
-                const allGoals = d < today && (data?.ratios.get(d) ?? 0) >= 1;
-                const nEvents = items.filter((x) => x.kind === 'event' && !x.cancelled).length;
-                return (
-                  <View key={d} style={styles.cell}>
-                    {inMonth ? (
-                      <>
-                        <Pressable
-                          onPress={() => onSelect(d)}
-                          accessibilityRole="button"
-                          accessibilityState={{ selected: d === focus }}
-                          accessibilityLabel={`${mediumDayLabel(d)}${nEvents ? `, ${nEvents} rendez-vous` : ''}${isToday ? ", aujourd'hui" : ''}`}
-                          style={[
-                            styles.pill,
-                            allGoals && { backgroundColor: '#2E2E33' },
-                            isToday && { backgroundColor: colors.text },
-                            isSel && { borderWidth: 1.5, borderColor: colors.text },
-                          ]}>
-                          <AppText
-                            style={{ fontFamily: isToday ? fonts.bodyBold : fonts.displayMedium, fontSize: 15 }}
-                            color={isToday ? colors.onLight : colors.text}>
-                            {Number(d.slice(8))}
-                          </AppText>
-                        </Pressable>
-                        <View style={styles.dots}>
-                          {items.slice(0, 3).map((x) => (
-                            <View
-                              key={x.key}
-                              style={[styles.dot, x.cancelled ? { borderWidth: 1, borderColor: colors.textTertiary } : { backgroundColor: x.color }]}
-                            />
-                          ))}
-                        </View>
-                      </>
-                    ) : (
-                      <View style={styles.pill}>
-                        <AppText style={{ fontFamily: fonts.displayMedium, fontSize: 15 }} color={colors.textMuted}>
-                          {Number(d.slice(8))}
-                        </AppText>
-                      </View>
-                    )}
-                  </View>
-                );
-              })}
-            </View>
-          </View>
+      <ScrollView contentContainerStyle={{ paddingBottom: TAB_BAR_CLEARANCE }} showsVerticalScrollIndicator={false}>
+        <View style={{ height: GRID_HEIGHT }}>
+          <PeriodCarousel
+            ref={carousel}
+            index={monthIndex(focus)}
+            onShift={onShift}
+            renderPage={(i) => <MonthGridPage month={monthFromIndex(i)} focus={focus} onSelect={onSelect} />}
+          />
+        </View>
 
-          <View style={styles.legend}>
-            <Legend swatch={<View style={{ flexDirection: 'row', gap: 2 }}><View style={[styles.dot, { backgroundColor: '#4FD1D9' }]} /><View style={[styles.dot, { backgroundColor: '#FF9A3C' }]} /></View>} label="Rendez-vous" />
-            <Legend swatch={<View style={[styles.dot, { borderWidth: 1, borderColor: colors.textTertiary }]} />} label="Annulé" />
-            <Legend swatch={<View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: '#2E2E33' }} />} label="Objectifs atteints" />
-          </View>
-
-          <Animated.View key={focus} entering={FadeIn.duration(150)} style={styles.summary} accessibilityLiveRegion="polite">
-            <View style={styles.summaryHead}>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <AppText variant="title">{title}</AppText>
-                <AppText variant="caption" style={{ marginTop: 2 }}>
-                  {sub}
-                </AppText>
+        <View style={styles.legend}>
+          <Legend
+            swatch={
+              <View style={{ flexDirection: 'row', gap: 2 }}>
+                <View style={[styles.dot, { backgroundColor: '#4FD1D9' }]} />
+                <View style={[styles.dot, { backgroundColor: '#FF9A3C' }]} />
               </View>
-              <Pressable onPress={() => onOpenDay(focus)} accessibilityRole="button" style={styles.openBtn}>
-                <AppText style={{ fontFamily: fonts.bodySemiBold, fontSize: 13 }}>Ouvrir le jour ›</AppText>
-              </Pressable>
+            }
+            label="Rendez-vous"
+          />
+          <Legend swatch={<View style={[styles.dot, { borderWidth: 1, borderColor: colors.textTertiary }]} />} label="Annulé" />
+          <Legend swatch={<View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: '#2E2E33' }} />} label="Objectifs atteints" />
+        </View>
+
+        <Animated.View key={focus} entering={FadeIn.duration(150)} style={styles.summary} accessibilityLiveRegion="polite">
+          <View style={styles.summaryHead}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <AppText variant="title">{title}</AppText>
+              <AppText variant="caption" style={{ marginTop: 2 }}>
+                {sub}
+              </AppText>
             </View>
-            <View style={{ gap: 6 }}>
-              {selected.map((it) => (
-                <ItemRow key={it.key} item={it} onPress={onItemPress} />
-              ))}
-              {selected.length === 0 && (
-                <Pressable
-                  onPress={() => router.push({ pathname: '/rdv/nouveau', params: { day: focus } })}
-                  accessibilityRole="button"
-                  style={styles.empty}>
-                  <AppText variant="body" color={colors.textTertiary}>
-                    Rien de prévu
+            <Pressable onPress={() => onOpenDay(focus)} accessibilityRole="button" style={styles.openBtn}>
+              <AppText style={{ fontFamily: fonts.bodySemiBold, fontSize: 13 }}>Ouvrir le jour ›</AppText>
+            </Pressable>
+          </View>
+          <View style={{ gap: 6 }}>
+            {selected.map((it) => (
+              <ItemRow key={it.key} item={it} onPress={onItemPress} />
+            ))}
+            {data && selected.length === 0 && (
+              <Pressable
+                onPress={() => router.push({ pathname: '/rdv/nouveau', params: { day: focus } })}
+                accessibilityRole="button"
+                style={styles.empty}>
+                <AppText variant="body" color={colors.textTertiary}>
+                  Rien de prévu
+                </AppText>
+                <Icon name="plus" size={14} color={colors.textTertiary} strokeWidth={2} />
+              </Pressable>
+            )}
+          </View>
+        </Animated.View>
+      </ScrollView>
+    </View>
+  );
+}
+
+/** Une page du carrousel : la grille d'un mois, avec ses propres données. */
+function MonthGridPage({ month, focus, onSelect }: { month: string; focus: string; onSelect: (d: string) => void }) {
+  const today = todayKey();
+  const grid = monthGrid(month);
+
+  const { data } = useDbQuery(async (db) => {
+    const [agenda, ratios] = await Promise.all([
+      getAgendaDays(db, grid[0], grid[grid.length - 1]),
+      getGoalRatios(db, grid[0], grid[grid.length - 1]),
+    ]);
+    return { agenda, ratios };
+  }, month, { cacheId: 'mois' });
+
+  const byDay = new Map((data?.agenda ?? []).map((d) => [d.day, d.items]));
+
+  return (
+    <View style={styles.card}>
+      <View style={styles.letters} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+        {LETTERS.map((l, i) => (
+          <AppText key={i} variant="caption" style={styles.letter}>
+            {l}
+          </AppText>
+        ))}
+      </View>
+      <View style={styles.grid}>
+        {grid.map((d) => {
+          const inMonth = d.slice(0, 7) === month.slice(0, 7);
+          const items = byDay.get(d) ?? [];
+          const isToday = d === today;
+          const isSel = d === focus && !isToday;
+          const allGoals = d < today && (data?.ratios.get(d) ?? 0) >= 1;
+          const nEvents = items.filter((x) => x.kind === 'event' && !x.cancelled).length;
+          return (
+            <View key={d} style={styles.cell}>
+              {inMonth ? (
+                <>
+                  <Pressable
+                    onPress={() => onSelect(d)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: d === focus }}
+                    accessibilityLabel={`${mediumDayLabel(d)}${nEvents ? `, ${nEvents} rendez-vous` : ''}${isToday ? ", aujourd'hui" : ''}`}
+                    style={[
+                      styles.pill,
+                      allGoals && { backgroundColor: '#2E2E33' },
+                      isToday && { backgroundColor: colors.text },
+                      isSel && { borderWidth: 1.5, borderColor: colors.text },
+                    ]}>
+                    <AppText
+                      style={{ fontFamily: isToday ? fonts.bodyBold : fonts.displayMedium, fontSize: 15 }}
+                      color={isToday ? colors.onLight : colors.text}>
+                      {Number(d.slice(8))}
+                    </AppText>
+                  </Pressable>
+                  <View style={styles.dots}>
+                    {items.slice(0, 3).map((x) => (
+                      <View
+                        key={x.key}
+                        style={[styles.dot, x.cancelled ? { borderWidth: 1, borderColor: colors.textTertiary } : { backgroundColor: x.color }]}
+                      />
+                    ))}
+                  </View>
+                </>
+              ) : (
+                <View style={styles.pill}>
+                  <AppText style={{ fontFamily: fonts.displayMedium, fontSize: 15 }} color={colors.textMuted}>
+                    {Number(d.slice(8))}
                   </AppText>
-                  <Icon name="plus" size={14} color={colors.textTertiary} strokeWidth={2} />
-                </Pressable>
+                </View>
               )}
             </View>
-          </Animated.View>
-        </ScrollView>
-      </SwipePager>
+          );
+        })}
+      </View>
     </View>
   );
 }
@@ -196,11 +228,11 @@ const styles = StyleSheet.create({
   letters: { flexDirection: 'row', height: 26, alignItems: 'center' },
   letter: { flex: 1, textAlign: 'center', fontFamily: fonts.bodyMedium },
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
-  cell: { width: `${100 / 7}%`, height: 50, alignItems: 'center', gap: 3 },
+  cell: { width: `${100 / 7}%`, height: CELL, alignItems: 'center', gap: 3 },
   pill: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
   dots: { flexDirection: 'row', gap: 3, height: 5 },
   dot: { width: 5, height: 5, borderRadius: 3 },
-  legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 14, marginHorizontal: 20, marginTop: 10 },
+  legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 14, marginHorizontal: 20, marginTop: 4 },
   summary: {
     marginHorizontal: 16,
     marginTop: 12,

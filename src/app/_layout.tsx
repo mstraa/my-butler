@@ -44,7 +44,7 @@ export default function RootLayout() {
             <Stack.Screen name="(tabs)" />
             <Stack.Screen
               name="ajouter"
-              options={{ presentation: 'transparentModal', animation: 'fade', contentStyle: { backgroundColor: 'transparent' } }}
+              options={{ presentation: 'transparentModal', animation: 'none', contentStyle: { backgroundColor: 'transparent' } }}
             />
             <Stack.Screen name="en-retard" options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="reglages" options={{ animation: 'slide_from_right' }} />
