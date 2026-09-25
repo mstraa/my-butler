@@ -1,5 +1,5 @@
 import * as Haptics from 'expo-haptics';
-import { router } from 'expo-router';
+import { router, usePathname } from 'expo-router';
 import type { TabTriggerSlotProps } from 'expo-router/ui';
 import { createContext, type Ref, use } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useFabTone } from '@/components/fab-tone';
 import { Icon, type IconName } from '@/components/icon';
+import { getSelectedDay } from '@/lib/selected-day';
 import { colors } from '@/theme/tokens';
 
 type TabIconButtonProps = TabTriggerSlotProps & {
@@ -52,6 +53,7 @@ export const BottomExtraContext = createContext(0);
 export function FloatingTabBar({ children }: { children: React.ReactNode }) {
   const insets = useSafeAreaInsets();
   const dark = useFabTone() === 'dark';
+  const pathname = usePathname();
   return (
     <View pointerEvents="box-none" style={[styles.wrap, { bottom: Math.max(insets.bottom, 12) + 8 }]}>
       <View style={styles.pill}>{children}</View>
@@ -60,7 +62,11 @@ export function FloatingTabBar({ children }: { children: React.ReactNode }) {
         accessibilityRole="button"
         accessibilityLabel="Ajouter"
         onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-        onPress={() => router.push('/ajouter')}
+        onPress={() => {
+          // Sur l'agenda (Jour / Mois), on ajoute au jour choisi.
+          const day = pathname === '/' ? getSelectedDay() : null;
+          router.push(day ? { pathname: '/ajouter', params: { day } } : '/ajouter');
+        }}
         style={({ pressed }) => [
           styles.fab,
           dark && styles.fabDark,

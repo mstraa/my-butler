@@ -1,5 +1,5 @@
 import * as Haptics from 'expo-haptics';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -11,6 +11,7 @@ import { WeekView } from '@/components/agenda/week-view';
 import { Screen } from '@/components/screen';
 import { BottomExtraContext, tabBarTop } from '@/components/tab-bar';
 import { shiftDay, shiftMonth, todayKey } from '@/lib/dates';
+import { setSelectedDay } from '@/lib/selected-day';
 
 /**
  * Onglet Agenda : quatre vues (Liste, Jour, Semaine, Mois) qui partagent un jour « en focus ».
@@ -49,6 +50,11 @@ export default function AgendaScreen() {
     setDirection(day > focus ? 1 : -1);
     setFocus(day);
   };
+  // Le bouton + crée au jour choisi en vue Jour ou Mois.
+  useEffect(() => {
+    setSelectedDay(view === 'jour' || view === 'mois' ? focus : null);
+  }, [view, focus]);
+
   const changeView = (v: AgendaView) => {
     setDirection(0);
     setView(v);
