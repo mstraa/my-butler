@@ -5,7 +5,7 @@ import { AppText } from '@/components/app-text';
 import { Icon } from '@/components/icon';
 import type { AgendaDay, AgendaItem, DayStats } from '@/db/agenda';
 import { shortDayLabel } from '@/lib/dates';
-import { colors, withAlpha } from '@/theme/tokens';
+import { colors, fonts, withAlpha } from '@/theme/tokens';
 
 type Props = {
   day: AgendaDay;
@@ -16,12 +16,14 @@ type Props = {
   onItemPress?: (item: AgendaItem) => void;
   /** Animer l'ouverture (seulement après un toucher, pas à l'affichage). */
   animate?: boolean;
+  /** Style animé du chiffre d'un jour fermé (ex. éclairci quand il passe sous le repère de la roue). */
+  numberStyle?: React.ComponentProps<typeof Animated.Text>['style'];
 };
 
 const layout = LinearTransition.springify().damping(22).stiffness(220);
 
 /** Une carte par jour : gros chiffre fin ; ouverte, elle liste tout le jour. */
-export function DayCard({ day, isToday, open, stats, onToggle, onItemPress, animate }: Props) {
+export function DayCard({ day, isToday, open, stats, onToggle, onItemPress, animate, numberStyle }: Props) {
   const n = Number(day.day.slice(8, 10));
   const label = isToday ? `${shortDayLabel(day.day)} · aujourd'hui` : shortDayLabel(day.day);
 
@@ -35,9 +37,7 @@ export function DayCard({ day, isToday, open, stats, onToggle, onItemPress, anim
           accessibilityState={{ expanded: false }}
           accessibilityLabel={`Déplier ${label}`}
           style={({ pressed }) => [styles.closed, pressed && { opacity: 0.85 }]}>
-          <AppText variant="hero" style={styles.closedNumber}>
-            {n}
-          </AppText>
+          <Animated.Text style={[styles.closedNumber, numberStyle]}>{n}</Animated.Text>
           <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
             {summary.length === 0 ? (
               <SummaryLine label="Rien de prévu" dot={colors.pill} color={colors.textMuted} />
@@ -157,7 +157,14 @@ const styles = StyleSheet.create({
     borderColor: colors.borderSoft,
     borderRadius: 24,
   },
-  closedNumber: { width: 104, fontSize: 64, lineHeight: 70, color: colors.textMuted },
+  closedNumber: {
+    width: 104,
+    fontFamily: fonts.displayThin,
+    fontSize: 64,
+    lineHeight: 70,
+    letterSpacing: -3,
+    color: colors.textMuted,
+  },
   open: {
     flexDirection: 'row',
     gap: 10,
