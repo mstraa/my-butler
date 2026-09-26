@@ -9,9 +9,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppText } from '@/components/app-text';
 import { showDialog } from '@/components/dialog';
 import { DateTimeSheet } from '@/components/form/date-time-sheet';
+import { NoteEditor } from '@/components/form/note-editor';
 import { Chip, FieldLabel, OptionSheet, PickerField, SwitchRow, TextField } from '@/components/form/fields';
 import { Icon } from '@/components/icon';
-import { Markdown } from '@/components/markdown';
 import type { Category } from '@/db/events';
 import { formatEuros, parseEuros, type TaskDraft } from '@/db/tasks';
 import { NAGS, REMINDERS } from '@/lib/event-options';
@@ -53,10 +53,8 @@ export function TaskForm({ title, initial, categories, onSave, onDelete }: Props
   const [sheet, setSheet] = useState<'due' | 'day' | 'reminder' | 'nag' | null>(null);
   const [saving, setSaving] = useState(false);
   const [showErrors, setShowErrors] = useState(false);
-  const [notePreview, setNotePreview] = useState(false);
   /** Raccourci de date touché en dernier (null : date choisie à la main). */
   const [preset, setPreset] = useState<string | null>(null);
-  const [noteFocused, setNoteFocused] = useState(false);
 
   const set = (patch: Partial<TaskDraft>) => setD((cur) => ({ ...cur, ...patch }));
   const hasDue = d.due !== null;
@@ -285,52 +283,12 @@ export function TaskForm({ title, initial, categories, onSave, onDelete }: Props
             )}
           </Animated.View>
 
-          <Animated.View entering={FadeInDown.delay(220).duration(400)} style={{ gap: 6 }}>
-            <View style={styles.noteHead}>
-              <FieldLabel nativeID="lbl-notes">Note</FieldLabel>
-              <View style={styles.segment}>
-                {(['Écrire', 'Aperçu'] as const).map((m) => {
-                  const on = (m === 'Aperçu') === notePreview;
-                  return (
-                    <Pressable
-                      key={m}
-                      onPress={() => setNotePreview(m === 'Aperçu')}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: on }}
-                      style={[styles.segBtn, on && { backgroundColor: colors.text }]}>
-                      <AppText style={{ fontFamily: fonts.bodySemiBold, fontSize: 12 }} color={on ? colors.onLight : colors.textSecondary}>
-                        {m}
-                      </AppText>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
-            {notePreview ? (
-              <View style={styles.notePreview}>
-                {d.notes.trim() ? (
-                  <Markdown source={d.notes} onToggle={(notes) => set({ notes })} />
-                ) : (
-                  <AppText variant="body" color={colors.textTertiary}>
-                    Rien à afficher.
-                  </AppText>
-                )}
-              </View>
-            ) : (
-              <TextInput
-                accessibilityLabelledBy="lbl-notes"
-                value={d.notes}
-                onChangeText={(notes) => set({ notes })}
-                placeholder={'Markdown : **gras**, *italique*, - liste, - [ ] case à cocher, [lien](https://…)'}
-                placeholderTextColor={colors.textTertiary}
-                cursorColor={colors.text}
-                selectionColor={colors.textSecondary}
-                multiline
-                onFocus={() => setNoteFocused(true)}
-                onBlur={() => setNoteFocused(false)}
-                style={[styles.noteInput, noteFocused && { borderColor: colors.text }]}
-              />
-            )}
+          <Animated.View entering={FadeInDown.delay(220).duration(400)}>
+            <NoteEditor
+              value={d.notes}
+              onChange={(notes) => set({ notes })}
+              placeholder="Détails, liste de choses à faire…"
+            />
           </Animated.View>
 
           {hasDue && d.showLate && (
@@ -474,31 +432,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   euro: { position: 'absolute', right: 12, top: 10, fontFamily: fonts.displayMedium, fontSize: 15 },
-  noteHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  segment: { flexDirection: 'row', gap: 2, padding: 3, borderRadius: 999, backgroundColor: colors.segmented, borderWidth: 1, borderColor: colors.border },
-  segBtn: { height: 26, paddingHorizontal: 12, borderRadius: 999, justifyContent: 'center' },
-  noteInput: {
-    minHeight: 120,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
-    borderRadius: 14,
-    backgroundColor: colors.segmented,
-    color: colors.text,
-    fontFamily: fonts.body,
-    fontSize: 15,
-    lineHeight: 21,
-    textAlignVertical: 'top',
-  },
-  notePreview: {
-    minHeight: 120,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 14,
-    backgroundColor: colors.surface,
-  },
   note: {
     flexDirection: 'row',
     alignItems: 'center',

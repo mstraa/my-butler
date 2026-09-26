@@ -17,7 +17,7 @@ export type TaskDraft = {
   nagAt: string | null;
   tracksExpense: boolean;
   estimateCents: number | null;
-  /** Note libre, en Markdown. */
+  /** Note libre (mise en forme à l'affichage). */
   notes: string;
 };
 

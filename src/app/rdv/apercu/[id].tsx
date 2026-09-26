@@ -19,7 +19,8 @@ import { scheduleOnRN } from 'react-native-worklets';
 import { AppText } from '@/components/app-text';
 import { DeadlineSection, NoteField } from '@/components/event-parts';
 import { Icon, type IconName } from '@/components/icon';
-import { duplicateEvent, type EventRecord, getCategories, getEvent, restoreEvent } from '@/db/events';
+import { Markdown } from '@/components/markdown';
+import { duplicateEvent, type EventRecord, getCategories, getEvent, restoreEvent, setEventNotes } from '@/db/events';
 import { useDbMutation, useDbQuery } from '@/db/use-query';
 import { dayOf } from '@/lib/dates';
 import {
@@ -181,6 +182,7 @@ export default function EventSheet() {
                     categories={data!.categories}
                     onClose={() => goto('close')}
                     onEdit={() => router.push({ pathname: '/rdv/modifier/[id]', params: { id: String(e.id) } })}
+                    onNotes={(notes) => mutate((db) => setEventNotes(db, e.id, notes))}
                   />
                 )}
               </View>
@@ -273,13 +275,14 @@ function Grabber({ p }: { p: SharedValue<number> }) {
 
 /** Haut de la feuille, commun à l'aperçu et au détail. */
 function PreviewTop({
-  e, day, categories, onClose, onEdit,
+  e, day, categories, onClose, onEdit, onNotes,
 }: {
   e: EventRecord;
   day?: string;
   categories: Parameters<typeof categoryOf>[1];
   onClose: () => void;
   onEdit: () => void;
+  onNotes: (notes: string) => void;
 }) {
   const cat = categoryOf(e, categories);
   const { start, end } = occurrenceOf(e, day || undefined);
@@ -363,7 +366,13 @@ function PreviewTop({
               <AppText variant="caption" style={{ fontSize: 11 }}>
                 {f.label}
               </AppText>
-              <AppText variant="bodyMedium">{f.value}</AppText>
+              {f.label === 'Notes' ? (
+                <View style={{ paddingTop: 2 }}>
+                  <Markdown source={f.value!} onToggle={onNotes} />
+                </View>
+              ) : (
+                <AppText variant="bodyMedium">{f.value}</AppText>
+              )}
             </View>
           </View>
         ))}
