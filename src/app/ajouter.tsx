@@ -230,7 +230,9 @@ const styles = StyleSheet.create({
   grabber: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: '#3A3A40' },
   titleRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', paddingHorizontal: 4 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  tileWrap: { width: '31.9%' },
+  // 3 tuiles par ligne quelle que soit la largeur : une base de 30 % en laisse passer 3 (pas 4),
+  // puis elles s'étirent pour remplir la ligne. Une largeur fixe (31,9 %) débordait à 390 px.
+  tileWrap: { flexGrow: 1, flexBasis: '30%' },
   tile: {
     height: 84,
     alignItems: 'center',
