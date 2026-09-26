@@ -12,6 +12,14 @@ export const REMINDERS: { value: number | null; label: string }[] = [
   { value: 1440, label: '1 jour avant' },
 ];
 
+/** Relance quotidienne d'une tâche en retard. */
+export const NAGS: { value: string | null; label: string }[] = [
+  { value: null, label: 'Jamais' },
+  { value: '09:00', label: 'chaque matin 9:00' },
+  { value: '12:00', label: 'chaque midi 12:00' },
+  { value: '18:00', label: 'chaque soir 18:00' },
+];
+
 export const RECURRENCES: { value: Recurrence; label: string }[] = [
   { value: 'none', label: 'Jamais' },
   { value: 'daily', label: 'Chaque jour' },

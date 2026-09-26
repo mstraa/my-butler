@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppText } from '@/components/app-text';
 import { showDialog } from '@/components/dialog';
 import { DateTimeSheet } from '@/components/form/date-time-sheet';
+import { NoteEditor } from '@/components/form/note-editor';
 import { Chip, FieldLabel, OptionSheet, PickerField, SwitchRow, TextField } from '@/components/form/fields';
 import { Icon } from '@/components/icon';
 import type { Category, EventDraft } from '@/db/events';
@@ -174,14 +175,7 @@ export function EventForm({ title, initial, categories, onSave, onDelete, readOn
             placeholder="Adresse ou lien"
           />
 
-          <TextField
-            label="Note"
-            value={d.notes}
-            onChangeText={(notes) => set({ notes })}
-            placeholder="Code d'accès, choses à apporter…"
-            multiline
-            style={styles.noteInput}
-          />
+          <NoteEditor value={d.notes} onChange={(notes) => set({ notes })} placeholder="Code d'accès, choses à apporter…" />
 
           <View style={styles.row}>
             <PickerField
@@ -321,7 +315,6 @@ const styles = StyleSheet.create({
   body: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 40, gap: 14 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   row: { flexDirection: 'row', gap: 8 },
-  noteInput: { height: undefined, minHeight: 88, paddingTop: 12, paddingBottom: 12, textAlignVertical: 'top' },
   deadlineCard: {
     gap: 12,
     padding: 14,

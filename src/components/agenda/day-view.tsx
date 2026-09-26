@@ -13,7 +13,7 @@ import Animated, {
 import { PeriodHeader } from '@/components/agenda/period-header';
 import { PeriodCarousel } from '@/components/agenda/period-carousel';
 import { SwipePager } from '@/components/agenda/swipe-pager';
-import { useItemPress } from '@/components/agenda/use-item-press';
+import { useItemLongPress, useItemPress } from '@/components/agenda/use-item-press';
 import { AppText } from '@/components/app-text';
 import { Icon } from '@/components/icon';
 import { useTabBarSpace } from '@/components/tab-bar';
@@ -202,6 +202,7 @@ function Row({ delay, node, animate, children }: { delay: number; node: React.Re
 }
 
 function ItemCard({ item, state, remaining, onPress }: { item: AgendaItem; state: NodeState; remaining: string; onPress: () => void }) {
+  const onLongPress = useItemLongPress();
   const time = item.kind === 'task' ? (item.time ? `avant ${item.time.slice(1)}` : '') : item.time || (item.allDay ? 'journée' : '');
 
   if (state === 'current') {
@@ -235,9 +236,9 @@ function ItemCard({ item, state, remaining, onPress }: { item: AgendaItem; state
   return (
     <Pressable
       onPress={onPress}
+      onLongPress={() => onLongPress(item)}
       disabled={item.kind === 'birthday'}
-      accessibilityRole={isTask ? 'checkbox' : 'button'}
-      accessibilityState={isTask ? { checked: item.done } : undefined}
+      accessibilityRole="button"
       style={[
         styles.card,
         isTask ? styles.cardTask : state === 'birthday' ? { backgroundColor: withAlpha(item.color, 0.1) } : styles.cardLight,
@@ -260,7 +261,7 @@ function ItemCard({ item, state, remaining, onPress }: { item: AgendaItem; state
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             {!isTask && <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: item.color }} />}
             <AppText variant="caption">
-              {isTask ? (item.done ? 'Tâche faite' : 'Tâche') : [item.location, item.end ? `→ ${timeOf(item.end)}` : null].filter(Boolean).join(' · ') || 'Rendez-vous'}
+              {isTask ? (item.done ? 'Tâche faite' : item.tracksExpense ? 'Tâche · dépense suivie' : 'Tâche') : [item.location, item.end ? `→ ${timeOf(item.end)}` : null].filter(Boolean).join(' · ') || 'Rendez-vous'}
             </AppText>
           </View>
         )}

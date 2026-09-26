@@ -2,6 +2,7 @@ import { addDays, addMonths, addYears, differenceInCalendarDays } from 'date-fns
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import type { IconName } from '@/components/icon';
+import { deleteTask } from '@/db/tasks';
 import { dayKey, dayOf, type DayKey, nowStamp, parseDay, shiftDay, type Stamp, timeOf } from '@/lib/dates';
 import { categoryColors, colors } from '@/theme/tokens';
 
@@ -23,6 +24,8 @@ export type AgendaItem = {
   cancelled: boolean;
   done: boolean;
   location?: string | null;
+  /** Tâche : le montant réel est demandé quand on la coche. */
+  tracksExpense?: boolean;
 };
 
 export type AgendaDay = {
@@ -49,6 +52,7 @@ type TaskRow = {
   day: DayKey;
   due_at: Stamp | null;
   state: string;
+  tracks_expense: number;
   color: string | null;
   cat_icon: string | null;
 };
@@ -94,7 +98,7 @@ export async function getAgendaDays(db: SQLiteDatabase, from: DayKey, to: DayKey
       from, shiftDay(to, 1), shiftDay(to, 1),
     ),
     db.getAllAsync<TaskRow>(
-      `SELECT t.id, t.title, t.day, t.due_at, t.state, c.color, c.icon AS cat_icon
+      `SELECT t.id, t.title, t.day, t.due_at, t.state, t.tracks_expense, c.color, c.icon AS cat_icon
          FROM tasks t LEFT JOIN categories c ON c.id = t.category_id
         WHERE t.day BETWEEN ? AND ? AND t.state != 'abandoned'`,
       from, to,
@@ -154,7 +158,7 @@ export async function getAgendaDays(db: SQLiteDatabase, from: DayKey, to: DayKey
         start: t.due_at, end: null, allDay: !sameDayDue,
         color: t.color ?? colors.textTertiary,
         icon: asIcon(t.cat_icon, 'task'),
-        cancelled: false, done: t.state === 'done',
+        cancelled: false, done: t.state === 'done', tracksExpense: !!t.tracks_expense,
       },
     });
   }
@@ -172,18 +176,25 @@ export type LateItem = {
   /** Pour un rendez-vous : sa date, ex. « rdv sam. 3/10 ». */
   eventAt: Stamp | null;
   color: string;
+  icon: IconName;
+  category: string | null;
+  /** Tâche avec dépense suivie : son estimation. */
+  estimateCents: number | null;
 };
 
 export async function getLateItems(db: SQLiteDatabase, now: Stamp = nowStamp()): Promise<LateItem[]> {
   const rows = await db.getAllAsync<{
-    type: 'task' | 'event'; id: number; title: string; due: Stamp; event_at: Stamp | null; color: string | null;
+    type: 'task' | 'event'; id: number; title: string; due: Stamp; event_at: Stamp | null;
+    color: string | null; icon: string | null; category: string | null; estimate_cents: number | null;
   }>(
-    `SELECT 'task' AS type, t.id, t.title, t.due_at AS due, NULL AS event_at, c.color
+    `SELECT 'task' AS type, t.id, t.title, t.due_at AS due, NULL AS event_at, c.color, c.icon, c.name AS category,
+            CASE WHEN t.tracks_expense = 1 THEN t.estimate_cents END AS estimate_cents
        FROM tasks t LEFT JOIN categories c ON c.id = t.category_id
-      WHERE t.state = 'open' AND t.due_at IS NOT NULL AND t.due_at < ?
+      WHERE t.state = 'open' AND t.show_late = 1 AND t.due_at IS NOT NULL AND t.due_at < ?
      UNION ALL
      SELECT 'event', e.id,
-            COALESCE(e.deadline_label || ' · ', '') || e.title, e.deadline_at, e.starts_at, c.color
+            COALESCE(e.deadline_label || ' · ', '') || e.title, e.deadline_at, e.starts_at,
+            c.color, COALESCE(e.icon, c.icon), c.name, NULL
        FROM events e LEFT JOIN categories c ON c.id = e.category_id
       WHERE e.deadline_state = 'open' AND e.deadline_at < ? AND e.cancelled_at IS NULL
      ORDER BY due`,
@@ -192,51 +203,111 @@ export async function getLateItems(db: SQLiteDatabase, now: Stamp = nowStamp()):
   return rows.map((r) => ({
     type: r.type, id: r.id, title: r.title, due: r.due, eventAt: r.event_at,
     color: r.color ?? colors.textTertiary,
+    icon: asIcon(r.icon, r.type === 'task' ? 'task' : 'calendar'),
+    category: r.category,
+    estimateCents: r.estimate_cents,
   }));
+}
+
+/** État d'un élément en retard avant une action, pour pouvoir l'annuler. */
+export type LateUndo = {
+  item: LateItem;
+  logId: number;
+  task?: { state: string; state_at: string | null; abandon_reason: string | null; due_at: Stamp; day: DayKey | null };
+  event?: { deadline_state: string | null; deadline_at: Stamp | null };
+};
+
+async function snapshot(db: SQLiteDatabase, item: LateItem): Promise<Omit<LateUndo, 'logId'>> {
+  if (item.type === 'task') {
+    const task = await db.getFirstAsync<NonNullable<LateUndo['task']>>(
+      'SELECT state, state_at, abandon_reason, due_at, day FROM tasks WHERE id = ?', item.id,
+    );
+    return { item, task: task ?? undefined };
+  }
+  const event = await db.getFirstAsync<NonNullable<LateUndo['event']>>(
+    'SELECT deadline_state, deadline_at FROM events WHERE id = ?', item.id,
+  );
+  return { item, event: event ?? undefined };
 }
 
 async function logDeadline(
   db: SQLiteDatabase, item: Pick<LateItem, 'type' | 'id' | 'due'>,
   action: 'done' | 'postponed' | 'abandoned', toDue: Stamp | null = null, note: string | null = null,
 ) {
-  await db.runAsync(
+  const res = await db.runAsync(
     'INSERT INTO deadline_log (item_type, item_id, action, at, from_due, to_due, note) VALUES (?, ?, ?, ?, ?, ?, ?)',
     item.type, item.id, action, nowStamp(), item.due, toDue, note,
   );
+  return res.lastInsertRowId;
 }
 
-export async function resolveLate(db: SQLiteDatabase, item: LateItem, action: 'done' | 'abandoned', note?: string) {
+/**
+ * Fait ou abandonné. `onTime` : fait avant l'échéance mais coché après coup —
+ * la tâche est datée de son échéance, et l'historique le note.
+ */
+export async function resolveLate(
+  db: SQLiteDatabase, item: LateItem, action: 'done' | 'abandoned',
+  { note, onTime }: { note?: string; onTime?: boolean } = {},
+): Promise<LateUndo> {
+  const before = await snapshot(db, item);
+  const reason = note?.trim() || null;
+  let logId = 0;
   await db.withTransactionAsync(async () => {
     if (item.type === 'task') {
       await db.runAsync(
         'UPDATE tasks SET state = ?, state_at = ?, abandon_reason = ? WHERE id = ?',
-        action, nowStamp(), action === 'abandoned' ? note ?? null : null, item.id,
+        action, onTime ? item.due : nowStamp(), action === 'abandoned' ? reason : null, item.id,
       );
     } else {
       // Abandonner l'échéance d'un rendez-vous n'annule pas le rendez-vous.
       await db.runAsync('UPDATE events SET deadline_state = ? WHERE id = ?', action, item.id);
     }
-    await logDeadline(db, item, action, null, note ?? null);
+    logId = await logDeadline(db, item, action, null, onTime ? 'fait à temps, coché après coup' : reason);
   });
+  return { ...before, logId };
 }
 
-export async function postponeLate(db: SQLiteDatabase, item: LateItem, to: Stamp) {
+export async function postponeLate(db: SQLiteDatabase, item: LateItem, to: Stamp): Promise<LateUndo> {
+  const before = await snapshot(db, item);
+  let logId = 0;
   await db.withTransactionAsync(async () => {
     if (item.type === 'task') {
       await db.runAsync('UPDATE tasks SET due_at = ?, day = ? WHERE id = ?', to, dayOf(to), item.id);
     } else {
       await db.runAsync('UPDATE events SET deadline_at = ? WHERE id = ?', to, item.id);
     }
-    await logDeadline(db, item, 'postponed', to);
+    logId = await logDeadline(db, item, 'postponed', to);
+  });
+  return { ...before, logId };
+}
+
+/** Remet l'élément comme avant l'action et retire sa ligne d'historique. */
+export async function undoLate(db: SQLiteDatabase, u: LateUndo) {
+  await db.withTransactionAsync(async () => {
+    if (u.task) {
+      await db.runAsync(
+        'UPDATE tasks SET state = ?, state_at = ?, abandon_reason = ?, due_at = ?, day = ? WHERE id = ?',
+        u.task.state, u.task.state_at, u.task.abandon_reason, u.task.due_at, u.task.day, u.item.id,
+      );
+    } else if (u.event) {
+      await db.runAsync(
+        'UPDATE events SET deadline_state = ?, deadline_at = ? WHERE id = ?',
+        u.event.deadline_state, u.event.deadline_at, u.item.id,
+      );
+    }
+    await db.runAsync('DELETE FROM deadline_log WHERE id = ?', u.logId);
   });
 }
 
-export async function toggleTaskDone(db: SQLiteDatabase, id: number) {
-  await db.runAsync(
-    `UPDATE tasks SET state = CASE state WHEN 'done' THEN 'open' ELSE 'done' END,
-                      state_at = ? WHERE id = ?`,
-    nowStamp(), id,
-  );
+/** Supprime sans historique : la tâche entière, ou seulement l'échéance d'un rendez-vous. */
+export async function deleteLate(db: SQLiteDatabase, item: LateItem) {
+  if (item.type === 'task') return deleteTask(db, item.id);
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(
+      'UPDATE events SET deadline_at = NULL, deadline_label = NULL, deadline_state = NULL WHERE id = ?', item.id,
+    );
+    await db.runAsync("DELETE FROM deadline_log WHERE item_type = 'event' AND item_id = ?", item.id);
+  });
 }
 
 export type DayStats = {

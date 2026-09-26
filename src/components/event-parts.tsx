@@ -1,8 +1,9 @@
 import * as Haptics from 'expo-haptics';
 import { useState } from 'react';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/app-text';
+import { NoteEditor } from '@/components/form/note-editor';
 import { Icon, type IconName } from '@/components/icon';
 import { postponeLate } from '@/db/agenda';
 import { type EventRecord, setEventDeadlineDone, setEventNotes } from '@/db/events';
@@ -51,7 +52,7 @@ export function DeadlineSection({ event: e }: { event: EventRecord }) {
               mutate((db) =>
                 postponeLate(
                   db,
-                  { type: 'event', id: e.id, title: e.title, due: d.at, eventAt: e.startsAt, color: '' },
+                  { type: 'event', id: e.id, title: e.title, due: d.at, eventAt: e.startsAt, color: '', icon: 'calendar', category: null, estimateCents: null },
                   `${shiftDay(dayOf(d.at), 1)}T${timeOf(d.at)}`,
                 ),
               )
@@ -69,32 +70,21 @@ export function DeadlineSection({ event: e }: { event: EventRecord }) {
   );
 }
 
-/** Note perso, enregistrée quand on quitte le champ. */
+/** Note perso, enregistrée quand on quitte le champ (ou quand on coche une case dans l'aperçu). */
 export function NoteField({ event: e }: { event: EventRecord }) {
   const mutate = useDbMutation();
   const [text, setText] = useState(e.notes);
-  const [focused, setFocused] = useState(false);
+  const save = (next: string) => {
+    if (next !== e.notes) mutate((db) => setEventNotes(db, e.id, next));
+  };
   return (
-    <View style={{ gap: 6 }}>
-      <AppText nativeID="note-label" style={{ paddingLeft: 4, fontFamily: fonts.bodySemiBold, fontSize: 12 }} color={colors.textTertiary}>
-        Note perso
-      </AppText>
-      <TextInput
-        accessibilityLabelledBy="note-label"
-        value={text}
-        onChangeText={setText}
-        onFocus={() => setFocused(true)}
-        onBlur={() => {
-          setFocused(false);
-          if (text !== e.notes) mutate((db) => setEventNotes(db, e.id, text));
-        }}
-        placeholder="Ajouter une note…"
-        placeholderTextColor={colors.textTertiary}
-        cursorColor={colors.text}
-        multiline
-        style={[styles.note, focused && { borderColor: colors.text }]}
-      />
-    </View>
+    <NoteEditor
+      label="Note perso"
+      value={text}
+      onChange={setText}
+      onCommit={save}
+      placeholder="Ajouter une note…"
+    />
   );
 }
 
@@ -132,18 +122,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   smallBtn: { height: 32, paddingHorizontal: 12, borderWidth: 1, borderColor: colors.borderDashed, borderRadius: 999, justifyContent: 'center' },
-  note: {
-    minHeight: 48,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
-    borderRadius: 14,
-    backgroundColor: colors.segmented,
-    color: colors.text,
-    fontFamily: fonts.body,
-    fontSize: 15,
-  },
   secondary: {
     flex: 1,
     height: 48,

@@ -19,7 +19,8 @@ import { scheduleOnRN } from 'react-native-worklets';
 import { AppText } from '@/components/app-text';
 import { DeadlineSection, NoteField } from '@/components/event-parts';
 import { Icon, type IconName } from '@/components/icon';
-import { duplicateEvent, type EventRecord, getCategories, getEvent, restoreEvent } from '@/db/events';
+import { Markdown } from '@/components/markdown';
+import { duplicateEvent, type EventRecord, getCategories, getEvent, restoreEvent, setEventNotes } from '@/db/events';
 import { useDbMutation, useDbQuery } from '@/db/use-query';
 import { dayOf } from '@/lib/dates';
 import {
@@ -94,10 +95,11 @@ export default function EventSheet() {
 
   /** Hauteur de l'aperçu = haut de la feuille (jusqu'aux infos) + marge basse. */
   const onTopLayout = (e: LayoutChangeEvent) => {
+    // En détail, le haut change (ligne Notes retirée) : on garde la hauteur mesurée en aperçu.
+    if (inDetail.get() || closing.get()) return;
     const h = Math.min(FULL * 0.85, e.nativeEvent.layout.height + BOTTOM);
     const first = previewH.get() === 0;
     previewH.set(h);
-    if (inDetail.get() || closing.get()) return;
     ty.set(withTiming(FULL - h, { duration: first ? 280 : 200, easing: ease }));
   };
 
@@ -181,6 +183,8 @@ export default function EventSheet() {
                     categories={data!.categories}
                     onClose={() => goto('close')}
                     onEdit={() => router.push({ pathname: '/rdv/modifier/[id]', params: { id: String(e.id) } })}
+                    onNotes={(notes) => mutate((db) => setEventNotes(db, e.id, notes))}
+                    hideNotes={detail}
                   />
                 )}
               </View>
@@ -273,13 +277,16 @@ function Grabber({ p }: { p: SharedValue<number> }) {
 
 /** Haut de la feuille, commun à l'aperçu et au détail. */
 function PreviewTop({
-  e, day, categories, onClose, onEdit,
+  e, day, categories, onClose, onEdit, onNotes, hideNotes,
 }: {
   e: EventRecord;
   day?: string;
   categories: Parameters<typeof categoryOf>[1];
   onClose: () => void;
   onEdit: () => void;
+  onNotes: (notes: string) => void;
+  /** Détail : la note est éditée plus bas (Note perso), pas de ligne Notes en double. */
+  hideNotes?: boolean;
 }) {
   const cat = categoryOf(e, categories);
   const { start, end } = occurrenceOf(e, day || undefined);
@@ -297,7 +304,7 @@ function PreviewTop({
         : null,
       color: colors.late,
     },
-    { icon: 'note', label: 'Notes', value: e.notes || null },
+    { icon: 'note', label: 'Notes', value: hideNotes ? null : e.notes || null },
     { icon: 'source', label: 'Source', value: e.source === 'google' ? 'Importé de Google Agenda' : 'Créé dans l’app' },
   ];
   const infos = allInfos.filter((f) => f.value);
@@ -363,7 +370,13 @@ function PreviewTop({
               <AppText variant="caption" style={{ fontSize: 11 }}>
                 {f.label}
               </AppText>
-              <AppText variant="bodyMedium">{f.value}</AppText>
+              {f.label === 'Notes' ? (
+                <View style={{ paddingTop: 2 }}>
+                  <Markdown source={f.value!} onToggle={onNotes} />
+                </View>
+              ) : (
+                <AppText variant="bodyMedium">{f.value}</AppText>
+              )}
             </View>
           </View>
         ))}

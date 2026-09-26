@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
+import { useItemLongPress } from '@/components/agenda/use-item-press';
 import { AppText } from '@/components/app-text';
 import { Icon } from '@/components/icon';
 import type { AgendaDay, AgendaItem, DayStats } from '@/db/agenda';
@@ -124,6 +125,7 @@ export function DayCard({ day, isToday, open, stats, onToggle, onLongPress, onIt
 }
 
 export function ItemRow({ item, onPress }: { item: AgendaItem; onPress?: (i: AgendaItem) => void }) {
+  const onLongPress = useItemLongPress();
   const muted = item.cancelled || item.done;
   const iconColor = muted ? colors.textFaint : item.color;
   const a11y =
@@ -133,9 +135,9 @@ export function ItemRow({ item, onPress }: { item: AgendaItem; onPress?: (i: Age
   return (
     <Pressable
       onPress={() => onPress?.(item)}
+      onLongPress={() => onLongPress(item)}
       disabled={!onPress || item.kind === 'birthday'}
-      accessibilityRole={item.kind === 'task' ? 'checkbox' : item.kind === 'event' ? 'button' : 'text'}
-      accessibilityState={item.kind === 'task' ? { checked: item.done } : undefined}
+      accessibilityRole={item.kind === 'birthday' ? 'text' : 'button'}
       accessibilityLabel={a11y}
       style={[styles.row, item.cancelled && styles.rowCancelled]}>
       <View style={[styles.iconBox, { backgroundColor: muted ? '#1B1B1F' : withAlpha(item.color, 0.13) }]}>
