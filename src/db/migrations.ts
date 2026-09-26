@@ -182,6 +182,18 @@ const MIGRATIONS: string[] = [
   ALTER TABLE birthdays ADD COLUMN buy_days INTEGER NOT NULL DEFAULT 3;     -- acheter le cadeau N jours avant
   ALTER TABLE gift_ideas ADD COLUMN given_id INTEGER REFERENCES gifts_given(id); -- idée marquée « offert »
   `,
+  /* v6 — objectifs : icône */ `
+  ALTER TABLE goals ADD COLUMN icon TEXT;
+  UPDATE goals SET icon = 'fruit' WHERE key = 'fruits';
+  UPDATE goals SET icon = 'steps' WHERE key = 'steps';
+  UPDATE goals SET icon = 'book' WHERE key = 'reading';
+  UPDATE goals SET icon = 'pill' WHERE key = 'vitamins';
+  `,
+  /* v7 — objectifs : date de création (début de l'historique) */ `
+  ALTER TABLE goals ADD COLUMN created_at TEXT;                         -- 'YYYY-MM-DD'
+  UPDATE goals SET created_at = COALESCE(
+    (SELECT MIN(day) FROM goal_entries WHERE goal_id = goals.id), date('now', 'localtime'));
+  `,
 ];
 
 export async function migrateDbIfNeeded(db: SQLiteDatabase) {

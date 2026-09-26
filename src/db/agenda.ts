@@ -375,7 +375,7 @@ export type WeekGoal = {
   ratio: number;
 };
 
-const GOAL_COLORS = [
+export const GOAL_COLORS = [
   categoryColors.health, categoryColors.sport, categoryColors.work,
   categoryColors.groceries, categoryColors.family, categoryColors.friends,
 ];

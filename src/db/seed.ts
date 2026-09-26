@@ -109,20 +109,32 @@ export async function seedDemoData(db: SQLiteDatabase) {
       );
     }
 
-    const goal = (key: string, title: string, kind: string, target: number, unit: string | null, sort: number) =>
+    const goal = (key: string, title: string, kind: string, target: number, unit: string | null, sort: number, icon: string) =>
       db.runAsync(
-        "INSERT INTO goals (key, title, period, kind, target, unit, sort) VALUES (?, ?, 'day', ?, ?, ?, ?)",
-        key, title, kind, target, unit, sort,
+        "INSERT INTO goals (key, title, period, kind, target, unit, sort, icon) VALUES (?, ?, 'day', ?, ?, ?, ?, ?)",
+        key, title, kind, target, unit, sort, icon,
       );
-    await goal('fruits', 'Fruits & légumes', 'counter', 5, null, 0);
-    await goal('steps', 'Pas', 'value', 8000, 'pas', 1);
-    await goal('reading', 'Lecture', 'duration', 20, 'min', 2);
-    await goal('vitamins', 'Vitamines', 'bool', 1, null, 3);
+    await goal('fruits', 'Fruits & légumes', 'counter', 5, null, 0, 'fruit');
+    await goal('steps', 'Pas', 'value', 8000, 'pas', 1, 'steps');
+    await goal('reading', 'Lecture', 'duration', 20, 'min', 2, 'book');
+    await goal('vitamins', 'Vitamines', 'bool', 1, null, 3, 'pill');
+    // Objectifs de la semaine et du mois (onglet Objectifs, vue Semaine).
+    await db.runAsync(
+      "INSERT INTO goals (key, title, period, kind, target, unit, sort, icon) VALUES ('sport', 'Sport', 'week', 'counter', 3, 'séances', 4, 'sport')",
+    );
+    await db.runAsync(
+      "INSERT INTO goals (key, title, period, kind, target, unit, sort, icon) VALUES ('books', 'Livres', 'month', 'counter', 1, 'livre', 5, 'book')",
+    );
     const goals = await db.getAllAsync<{ id: number; key: string }>('SELECT id, key FROM goals');
     const g = (key: string) => goals.find((x) => x.key === key)!.id;
     for (const [key, value] of [['fruits', 3], ['steps', 4200], ['reading', 25], ['vitamins', 1]] as const) {
       await db.runAsync('INSERT INTO goal_entries (goal_id, day, value) VALUES (?, ?, ?)', g(key), t, value);
     }
+    // Série en cours : fruits atteints les 4 jours précédents ; une séance de sport hier.
+    for (let d = 1; d <= 4; d++) {
+      await db.runAsync('INSERT INTO goal_entries (goal_id, day, value) VALUES (?, ?, 5)', g('fruits'), shiftDay(t, -d));
+    }
+    await db.runAsync('INSERT INTO goal_entries (goal_id, day, value) VALUES (?, ?, 1)', g('sport'), shiftDay(t, -1));
 
     await db.runAsync('INSERT INTO sleep_log (day, woke_at) VALUES (?, ?)', t, '07:10');
     await db.runAsync('INSERT INTO eliquid_log (day, ml) VALUES (?, ?)', t, 3);
@@ -138,7 +150,7 @@ export async function clearAllData(db: SQLiteDatabase) {
       DELETE FROM deadline_log; DELETE FROM expenses; DELETE FROM tasks; DELETE FROM events;
       DELETE FROM goal_entries; DELETE FROM goals; DELETE FROM sleep_log; DELETE FROM eliquid_log;
       DELETE FROM wishes; DELETE FROM budgets; DELETE FROM day_notes;
-      DELETE FROM settings WHERE key = 'demo_data';
+      DELETE FROM settings WHERE key = 'demo_data' OR key LIKE 'chrono:%';
     `);
   });
 }

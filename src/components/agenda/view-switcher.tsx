@@ -17,9 +17,20 @@ const OPTIONS: { key: AgendaView; label: string }[] = [
 
 /** Sélecteur Liste / Jour / Semaine / Mois, posé en bas de l'écran au-dessus de la barre d'onglets. */
 export function ViewSwitcher({ value, onChange }: { value: AgendaView; onChange: (v: AgendaView) => void }) {
+  return <BottomSwitcher options={OPTIONS} value={value} onChange={onChange} />;
+}
+
+/** Pilule de choix du bas d'écran (agenda, objectifs) : mêmes tailles, même style partout. */
+export function BottomSwitcher<T extends string>({
+  options, value, onChange,
+}: {
+  options: { key: T; label: string }[];
+  value: T;
+  onChange: (v: T) => void;
+}) {
   return (
     <View style={styles.wrap} accessibilityRole="tablist">
-      {OPTIONS.map((o) => {
+      {options.map((o) => {
         const on = o.key === value;
         return (
           <Pressable
