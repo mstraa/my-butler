@@ -1,9 +1,12 @@
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import * as Haptics from 'expo-haptics';
+import { useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/app-text';
 import { showDialog } from '@/components/dialog';
 import { BackHeader, Screen } from '@/components/screen';
 import { clearAllData } from '@/db/seed';
+import { seedTestData } from '@/db/test-data';
 import { useDbMutation, useDbQuery } from '@/db/use-query';
 import { colors, fonts } from '@/theme/tokens';
 
@@ -26,6 +29,32 @@ export default function SettingsScreen() {
       [
         { text: 'Annuler', style: 'cancel' },
         { text: 'Effacer', style: 'destructive', onPress: () => mutate(clearAllData) },
+      ],
+    );
+
+  const [loading, setLoading] = useState(false);
+  const confirmTestData = () =>
+    showDialog(
+      'Charger des données de test ?',
+      'Toutes les données actuelles sont remplacées par un jeu fourni sur plusieurs mois : agenda, tâches, dépenses, objectifs, anniversaires.',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Remplacer',
+          style: 'destructive',
+          onPress: async () => {
+            setLoading(true);
+            try {
+              await mutate(seedTestData);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              showDialog('Données de test chargées', "Elles s'effacent avec « Effacer les données d'exemple ».");
+            } catch (e) {
+              showDialog('Échec du chargement', e instanceof Error ? e.message : String(e));
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
       ],
     );
 
@@ -66,6 +95,26 @@ export default function SettingsScreen() {
             </Pressable>
           </Section>
         )}
+
+        {/* Mode développement seulement (Expo Go, build de dev) : absent d'une version publiée. */}
+        {__DEV__ && (
+          <Section title="Développement">
+            <AppText variant="body" color={colors.textSecondary} style={{ lineHeight: 20 }}>
+              Remplit l&apos;app avec beaucoup de données sur plusieurs mois, pour tester les écrans.
+            </AppText>
+            <Pressable
+              onPress={confirmTestData}
+              disabled={loading}
+              accessibilityRole="button"
+              style={({ pressed }) => [styles.devBtn, (pressed || loading) && { opacity: 0.7 }]}>
+              {loading ? (
+                <ActivityIndicator color={colors.text} />
+              ) : (
+                <AppText style={{ fontFamily: fonts.bodySemiBold, fontSize: 14 }}>Charger des données de test</AppText>
+              )}
+            </Pressable>
+          </Section>
+        )}
       </ScrollView>
     </Screen>
   );
@@ -95,6 +144,13 @@ const styles = StyleSheet.create({
   rowBorder: { borderTopWidth: 1, borderTopColor: colors.border },
   swatch: { width: 14, height: 14, borderRadius: 7 },
   hint: { paddingTop: 4 },
+  devBtn: {
+    height: 46,
+    borderRadius: 999,
+    backgroundColor: colors.row,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   danger: {
     height: 46,
     borderRadius: 999,

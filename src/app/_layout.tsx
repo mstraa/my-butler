@@ -72,6 +72,12 @@ export default function RootLayout() {
               name="depense/budget"
               options={{ presentation: 'transparentModal', animation: 'none', contentStyle: { backgroundColor: 'transparent' } }}
             />
+            <Stack.Screen name="objectif/nouveau" options={{ animation: 'slide_from_bottom' }} />
+            <Stack.Screen name="objectif/modifier/[id]" options={{ animation: 'slide_from_bottom' }} />
+            <Stack.Screen
+              name="objectif/historique/[id]"
+              options={{ presentation: 'transparentModal', animation: 'none', contentStyle: { backgroundColor: 'transparent' } }}
+            />
             <Stack.Screen name="anniversaires/index" options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="anniversaires/[id]" options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="anniversaires/nouveau" options={{ animation: 'slide_from_bottom' }} />
