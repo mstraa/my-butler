@@ -45,3 +45,7 @@ example
 # APK / AAB produits par « eas build --local »
 *.apk
 *.aab
+
+# Sorties Gradle des modules natifs locaux
+modules/*/android/build/
+modules/*/android/.gradle/
