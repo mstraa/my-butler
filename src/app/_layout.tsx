@@ -12,6 +12,7 @@ import { AnimatedSplash } from '@/components/animated-splash';
 import { DialogHost } from '@/components/dialog';
 import { NotificationSync } from '@/components/notification-sync';
 import { migrateDbIfNeeded } from '@/db/migrations';
+import { markSplashDone } from '@/lib/splash-state';
 import { colors } from '@/theme/tokens';
 
 SplashScreen.preventAutoHideAsync();
@@ -34,7 +35,10 @@ export default function RootLayout() {
 
   // Le splash natif (noir, vide) laisse la place au splash animé dès que les polices sont prêtes.
   const [splashDone, setSplashDone] = useState(false);
-  const endSplash = useCallback(() => setSplashDone(true), []);
+  const endSplash = useCallback(() => {
+    setSplashDone(true);
+    markSplashDone();
+  }, []);
   useEffect(() => {
     if (fontsLoaded || fontError) SplashScreen.hideAsync();
   }, [fontsLoaded, fontError]);
@@ -122,8 +126,10 @@ export default function RootLayout() {
           </Stack>
           <NotificationSync />
           <DialogHost />
-          {!splashDone && <AnimatedSplash onDone={endSplash} />}
         </SQLiteProvider>
+        {/* Hors de <SQLiteProvider> : ses enfants directs ne sont pas re-rendus quand cet état change,
+            et le splash (noir, transparent à la fin de l'animation) restait posé sur l'app. */}
+        {!splashDone && <AnimatedSplash onDone={endSplash} />}
       </ThemeProvider>
     </GestureHandlerRootView>
   );
