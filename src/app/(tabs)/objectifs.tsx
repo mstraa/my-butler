@@ -112,15 +112,17 @@ function ObjectifsBody({ bottomOffset }: { bottomOffset: number }) {
           </>
         )}
 
-        <Pressable
-          onPress={() => router.push({ pathname: '/objectif/nouveau', params: { period: tab === 'list' ? 'day' : tab } })}
-          accessibilityRole="button"
-          style={({ pressed }) => [styles.addBtn, pressed && { backgroundColor: colors.surface }]}>
-          <Icon name="plus" size={16} color={colors.textSecondary} strokeWidth={2} />
-          <AppText style={{ fontFamily: fonts.bodySemiBold, fontSize: 14 }} color={colors.textSecondary}>
-            Nouvel objectif
-          </AppText>
-        </Pressable>
+        {tab !== 'list' && (
+          <Pressable
+            onPress={() => router.push({ pathname: '/objectif/nouveau', params: { period: tab } })}
+            accessibilityRole="button"
+            style={({ pressed }) => [styles.addBtn, pressed && { backgroundColor: colors.surface }]}>
+            <Icon name="plus" size={16} color={colors.textSecondary} strokeWidth={2} />
+            <AppText style={{ fontFamily: fonts.bodySemiBold, fontSize: 14 }} color={colors.textSecondary}>
+              Nouvel objectif
+            </AppText>
+          </Pressable>
+        )}
       </ScrollView>
 
       {/* Choix de la vue, en bas, juste au-dessus de la barre d'onglets (comme l'agenda). */}

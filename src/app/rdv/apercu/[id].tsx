@@ -1,7 +1,7 @@
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { BackHandler, type LayoutChangeEvent, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { BackHandler, type LayoutChangeEvent, Linking, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Easing,
@@ -363,6 +363,27 @@ function PreviewTop({
         )}
       </View>
 
+      {e.meetUrl && (
+        <Pressable
+          onPress={() => Linking.openURL(e.meetUrl!).catch(() => {})}
+          accessibilityRole="link"
+          accessibilityLabel="Rejoindre la visio Google Meet"
+          style={({ pressed }) => [styles.meet, pressed && { opacity: 0.8 }]}>
+          <View style={[styles.infoIcon, { backgroundColor: withAlpha(MEET, 0.15) }]}>
+            <Icon name="video" size={16} color={MEET} />
+          </View>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <AppText variant="bodyStrong" style={{ fontSize: 15 }}>
+              Rejoindre Google Meet
+            </AppText>
+            <AppText variant="caption" numberOfLines={1}>
+              {e.meetUrl.replace(/^https?:\/\//, '')}
+            </AppText>
+          </View>
+          <Icon name="external" size={16} color={colors.textSecondary} />
+        </Pressable>
+      )}
+
       <View style={styles.infos}>
         {infos.map((f, i) => (
           <View key={f.label} style={[styles.infoRow, i > 0 && styles.infoBorder]}>
@@ -387,6 +408,9 @@ function PreviewTop({
     </>
   );
 }
+
+/** Vert de Google Meet. */
+const MEET = '#34A853';
 
 function GoogleNote() {
   return (
@@ -443,6 +467,10 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   time: { fontFamily: fonts.displayThin, fontSize: 32, lineHeight: 36, letterSpacing: -0.6, color: colors.text },
+  meet: {
+    flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 14,
+    borderRadius: 18, borderWidth: 1, borderColor: withAlpha(MEET, 0.35), backgroundColor: withAlpha(MEET, 0.08),
+  },
   durPill: { paddingVertical: 4, paddingHorizontal: 10, borderRadius: 999, backgroundColor: colors.surfaceRaised },
   infos: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.row, borderRadius: 20, overflow: 'hidden' },
   infoRow: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 6, paddingHorizontal: 14 },

@@ -63,6 +63,7 @@ export const iconPaths = {
   clipboard: 'M9 4h6v3H9zM7 5.5H6a2 2 0 0 0-2 2V19a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5a2 2 0 0 0-2-2h-1',
   sort: 'M7 4v16M4 17l3 3 3-3M17 20V4M14 7l3-3 3 3',
   external: 'M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5',
+  video: 'M4 7h10a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1zM15 10.5l6-3.5v10l-6-3.5',
 } as const;
 
 export type IconName = keyof typeof iconPaths;

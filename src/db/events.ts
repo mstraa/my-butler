@@ -26,6 +26,8 @@ export type EventDraft = {
 export type EventRecord = EventDraft & {
   id: number;
   source: 'app' | 'google';
+  /** Lien Google Meet (rendez-vous importés de Google Agenda). */
+  meetUrl: string | null;
   deadlineState: 'open' | 'done' | 'abandoned' | null;
   cancelledAt: string | null;
   cancelReason: string | null;
@@ -38,7 +40,7 @@ export async function getEvent(db: SQLiteDatabase, id: number): Promise<EventRec
     all_day: number; location: string | null; reminder_min: number | null; recurrence: Recurrence;
     deadline_at: Stamp | null; deadline_label: string | null; deadline_state: EventRecord['deadlineState'];
     source: 'app' | 'google'; cancelled_at: string | null; cancel_reason: string | null;
-    cancel_mode: 'keep' | 'hide' | null; notes: string | null;
+    cancel_mode: 'keep' | 'hide' | null; notes: string | null; meet_url: string | null;
   }>('SELECT * FROM events WHERE id = ?', id);
   if (!r) return null;
   return {
@@ -54,6 +56,7 @@ export async function getEvent(db: SQLiteDatabase, id: number): Promise<EventRec
     deadline: r.deadline_at ? { label: r.deadline_label ?? '', at: r.deadline_at } : null,
     deadlineState: r.deadline_state,
     source: r.source,
+    meetUrl: r.meet_url,
     cancelledAt: r.cancelled_at,
     cancelReason: r.cancel_reason,
     cancelMode: r.cancel_mode,
