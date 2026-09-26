@@ -1,4 +1,4 @@
-# My Butler
+# My Personal Life
 
 App Android perso (Expo) : agenda, tâches à échéance, objectifs, dépenses, suivi, envies d'achat et anniversaires.
 Le design de référence est le canevas « App Agenda Android » (page Haute fidélité) ; le brief est dans le projet LifeEnhancer.

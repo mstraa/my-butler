@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <path id="ring" d="M 790.2 399.6 A 300 300 0 1 1 634.0 237.9" fill="none" stroke="#FFFFFF" stroke-width="64" stroke-linecap="round"/>
+  <path id="arrow" d="M 596.2 313.0 L 725.4 278.6 L 664.5 159.6 Z" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="24" stroke-linejoin="round"/>
+  <path id="stem" d="M 512 690 L 512 540" fill="none" stroke="#FFFFFF" stroke-width="56" stroke-linecap="round"/>
+  <path id="leafL" d="M 508 552 C 424 556 352 500 346 404 C 440 400 506 458 508 552 Z" fill="#FFFFFF"/>
+  <path id="leafR" d="M 516 552 C 520 458 586 400 680 404 C 674 500 602 556 516 552 Z" fill="#FFFFFF"/>
+</svg>

@@ -5,9 +5,10 @@ import { DarkTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { SQLiteProvider } from 'expo-sqlite';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
+import { AnimatedSplash } from '@/components/animated-splash';
 import { DialogHost } from '@/components/dialog';
 import { migrateDbIfNeeded } from '@/db/migrations';
 import { colors } from '@/theme/tokens';
@@ -30,6 +31,9 @@ export default function RootLayout() {
     DMSans_700Bold,
   });
 
+  // Le splash natif (noir, vide) laisse la place au splash animé dès que les polices sont prêtes.
+  const [splashDone, setSplashDone] = useState(false);
+  const endSplash = useCallback(() => setSplashDone(true), []);
   useEffect(() => {
     if (fontsLoaded || fontError) SplashScreen.hideAsync();
   }, [fontsLoaded, fontError]);
@@ -39,6 +43,7 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.bg }}>
       <ThemeProvider value={navTheme}>
+        {/* Nom de fichier gardé de « My Butler » : le changer repartirait d'une base vide. */}
         <SQLiteProvider databaseName="butler.db" onInit={migrateDbIfNeeded}>
           <StatusBar style="light" />
           <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
@@ -98,6 +103,7 @@ export default function RootLayout() {
             />
           </Stack>
           <DialogHost />
+          {!splashDone && <AnimatedSplash onDone={endSplash} />}
         </SQLiteProvider>
       </ThemeProvider>
     </GestureHandlerRootView>
