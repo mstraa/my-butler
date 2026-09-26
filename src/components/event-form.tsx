@@ -25,6 +25,8 @@ type Props = {
   onSave: (d: EventDraft) => Promise<void>;
   onDelete?: () => Promise<void>;
   readOnlyNote?: string;
+  /** Importé de Google Agenda : titre, horaires, lieu et répétition viennent de Google, non modifiables. */
+  external?: boolean;
 };
 
 const addMinutes = (s: Stamp, min: number) => {
@@ -34,7 +36,7 @@ const addMinutes = (s: Stamp, min: number) => {
 };
 
 /** Formulaire « Nouveau rendez-vous » / « Modifier le rendez-vous » (maquette HF-NouveauRdv). */
-export function EventForm({ title, initial, categories, onSave, onDelete, readOnlyNote }: Props) {
+export function EventForm({ title, initial, categories, onSave, onDelete, readOnlyNote, external }: Props) {
   const [d, setD] = useState<EventDraft>(() => ({ ...initial, notes: initial.notes ?? '', location: initial.location ?? '' }));
   const [sheet, setSheet] = useState<'reminder' | 'repeat' | 'when' | 'deadline' | null>(null);
   const [saving, setSaving] = useState(false);
@@ -109,14 +111,17 @@ export function EventForm({ title, initial, categories, onSave, onDelete, readOn
 
       <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.body}>
-          <Animated.View entering={FadeInDown.duration(400)} style={{ gap: 6 }}>
+          <Animated.View
+            entering={FadeInDown.duration(400)}
+            pointerEvents={external ? 'none' : 'auto'}
+            style={[{ gap: 6 }, external && styles.locked]}>
             <TextField
               label="Titre"
               big
               value={d.title}
               onChangeText={(title) => set({ title })}
               placeholder="Ex. Dîner chez Marc"
-              autoFocus={!initial.title}
+              autoFocus={!initial.title && !external}
               returnKeyType="done"
             />
             {showErrors && titleError && <ErrorText>{titleError}</ErrorText>}
@@ -139,7 +144,10 @@ export function EventForm({ title, initial, categories, onSave, onDelete, readOn
             </View>
           </Animated.View>
 
-          <Animated.View entering={FadeInDown.delay(120).duration(400)} style={{ gap: 6 }}>
+          <Animated.View
+            entering={FadeInDown.delay(120).duration(400)}
+            pointerEvents={external ? 'none' : 'auto'}
+            style={[{ gap: 6 }, external && styles.locked]}>
             <PickerField
               label="Date et heure"
               chevron
@@ -155,25 +163,27 @@ export function EventForm({ title, initial, categories, onSave, onDelete, readOn
             {showErrors && endError && <ErrorText>{endError}</ErrorText>}
           </Animated.View>
 
-          <SwitchRow
-            label="Toute la journée"
-            value={d.allDay}
-            onChange={(allDay) =>
-              set({
-                allDay,
-                startsAt: allDay ? `${dayOf(d.startsAt)}T00:00` : `${dayOf(d.startsAt)}T09:00`,
-                endsAt: allDay ? null : `${dayOf(d.startsAt)}T10:00`,
-              })
-            }
-          />
+          <View pointerEvents={external ? 'none' : 'auto'} style={[{ gap: 14 }, external && styles.locked]}>
+            <SwitchRow
+              label="Toute la journée"
+              value={d.allDay}
+              onChange={(allDay) =>
+                set({
+                  allDay,
+                  startsAt: allDay ? `${dayOf(d.startsAt)}T00:00` : `${dayOf(d.startsAt)}T09:00`,
+                  endsAt: allDay ? null : `${dayOf(d.startsAt)}T10:00`,
+                })
+              }
+            />
 
-          <TextField
-            label="Lieu"
-            icon="pin"
-            value={d.location}
-            onChangeText={(location) => set({ location })}
-            placeholder="Adresse ou lien"
-          />
+            <TextField
+              label="Lieu"
+              icon="pin"
+              value={d.location}
+              onChangeText={(location) => set({ location })}
+              placeholder="Adresse ou lien"
+            />
+          </View>
 
           <NoteEditor value={d.notes} onChange={(notes) => set({ notes })} placeholder="Code d'accès, choses à apporter…" />
 
@@ -187,6 +197,7 @@ export function EventForm({ title, initial, categories, onSave, onDelete, readOn
             <PickerField
               label="Répéter"
               chevron
+              disabled={external}
               value={RECURRENCES.find((r) => r.value === d.recurrence)?.label ?? 'Jamais'}
               onPress={() => setSheet('repeat')}
             />
@@ -335,6 +346,7 @@ const styles = StyleSheet.create({
     borderColor: colors.borderSoft,
     borderRadius: 14,
   },
+  locked: { opacity: 0.45 },
   deleteBtn: {
     height: 48,
     flexDirection: 'row',

@@ -34,19 +34,32 @@ export default function EditEventScreen() {
   }
 
   const { event, categories } = data;
+  const google = event.source === 'google';
   return (
     <EventForm
       key={event.id}
       title="Modifier le rendez-vous"
       categories={categories}
       initial={event}
-      readOnlyNote={event.recurrence !== 'none' ? 'Rendez-vous répété : les changements s\'appliquent à toutes les occurrences.' : undefined}
+      external={google}
+      readOnlyNote={
+        google
+          ? 'Importé de Google Agenda : titre, horaires et lieu se modifient dans Google Agenda. Catégorie, notes, rappel et échéance restent dans l\'app.'
+          : event.recurrence !== 'none'
+            ? 'Rendez-vous répété : les changements s\'appliquent à toutes les occurrences.'
+            : undefined
+      }
       onSave={async (draft) => {
         await mutate((db) => updateEvent(db, event.id, draft));
       }}
-      onDelete={async () => {
-        await mutate((db) => deleteEvent(db, event.id));
-      }}
+      // Supprimé ici, il reviendrait à la synchro suivante : on l'annule (masquer) à la place.
+      onDelete={
+        google
+          ? undefined
+          : async () => {
+              await mutate((db) => deleteEvent(db, event.id));
+            }
+      }
     />
   );
 }

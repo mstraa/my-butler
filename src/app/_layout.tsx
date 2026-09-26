@@ -10,6 +10,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AnimatedSplash } from '@/components/animated-splash';
 import { DialogHost } from '@/components/dialog';
+import { GoogleSync } from '@/components/google-sync';
 import { HealthSync } from '@/components/health-sync';
 import { NotificationSync } from '@/components/notification-sync';
 import { migrateDbIfNeeded } from '@/db/migrations';
@@ -127,6 +128,7 @@ export default function RootLayout() {
           </Stack>
           <NotificationSync />
           <HealthSync />
+          <GoogleSync />
           <DialogHost />
         </SQLiteProvider>
         {/* Hors de <SQLiteProvider> : ses enfants directs ne sont pas re-rendus quand cet état change,

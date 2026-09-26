@@ -95,12 +95,16 @@ export function PickerField({
 
 /** Interrupteur rond (piste 46 × 28), comme dans les maquettes. */
 export function SwitchRow({
-  label, value, onChange, icon,
+  label, value, onChange, icon, sub, dot,
 }: {
   label: string;
   value: boolean;
   onChange: (v: boolean) => void;
   icon?: IconName;
+  /** Petite ligne sous le libellé. */
+  sub?: string;
+  /** Pastille de couleur devant le libellé. */
+  dot?: string;
 }) {
   return (
     <Pressable
@@ -113,9 +117,17 @@ export function SwitchRow({
           <Icon name={icon} size={16} />
         </View>
       )}
-      <AppText variant={icon ? 'bodyStrong' : 'body'} style={{ flex: 1, fontSize: 15 }}>
-        {label}
-      </AppText>
+      {dot && <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: dot }} />}
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <AppText variant={icon ? 'bodyStrong' : 'body'} numberOfLines={sub ? 1 : undefined} style={{ fontSize: 15 }}>
+          {label}
+        </AppText>
+        {sub && (
+          <AppText variant="caption" numberOfLines={1}>
+            {sub}
+          </AppText>
+        )}
+      </View>
       <View style={[styles.track, value && { backgroundColor: colors.text }]}>
         <View style={[styles.knob, value && { backgroundColor: colors.onLight, transform: [{ translateX: 18 }] }]} />
       </View>
