@@ -63,6 +63,8 @@ export function FloatingTabBar({ children }: { children: React.ReactNode }) {
         accessibilityLabel="Ajouter"
         onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
         onPress={() => {
+          // Onglet Dépenses : le + ouvre directement la saisie d'une dépense.
+          if (pathname === '/depenses') return router.push('/depense/nouvelle');
           // Sur l'agenda (Jour / Mois), on ajoute au jour choisi.
           const day = pathname === '/' ? getSelectedDay() : null;
           router.push(day ? { pathname: '/ajouter', params: { day } } : '/ajouter');

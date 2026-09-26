@@ -152,20 +152,25 @@ export function Chip({
   );
 }
 
-/** Liste de choix dans une feuille qui monte du bas. */
+/**
+ * Liste de choix dans une feuille qui monte du bas.
+ * `asRoute` : la feuille est tout un écran (transparentModal), ex. au-dessus de la barre d'onglets ;
+ * elle se ferme alors par un retour de navigation.
+ */
 export function OptionSheet<T>({
-  visible, title, options, value, onPick, onClose,
+  visible = true, title, options, value, onPick, onClose, asRoute,
 }: {
-  visible: boolean;
+  visible?: boolean;
   title: string;
   options: { value: T; label: string }[];
   value: T;
   onPick: (v: T) => void;
-  onClose: () => void;
+  onClose?: () => void;
+  asRoute?: boolean;
 }) {
   if (!visible) return null;
   return (
-    <Sheet inline onClosed={onClose} label={title} style={{ maxHeight: '70%', gap: 8, paddingHorizontal: 12 }}>
+    <Sheet inline={!asRoute} onClosed={asRoute ? undefined : onClose} label={title} style={{ maxHeight: '70%', gap: 8, paddingHorizontal: 12 }}>
       {(close) => (
         <>
           <AppText variant="title" style={{ paddingHorizontal: 8, paddingBottom: 4 }}>

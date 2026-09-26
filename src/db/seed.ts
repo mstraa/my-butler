@@ -70,6 +70,22 @@ export async function seedDemoData(db: SQLiteDatabase) {
     await task('Renvoyer dossier mutuelle', shiftDay(t, -1), at(-1, '18:00'), 'personal');
     await task('Payer facture électricité', shiftDay(t, -3), at(-3, '12:00'), 'personal', 1, 8400);
 
+    // Dépenses : quelques-unes ce mois-ci et le mois dernier (comparaison).
+    const spend = (label: string, cents: number, offset: number, hhmm: string, catKey: string) =>
+      db.runAsync(
+        'INSERT INTO expenses (amount_cents, label, category_id, spent_at) VALUES (?, ?, ?, ?)',
+        cents, label, cat(catKey), at(offset, hhmm),
+      );
+    await spend('Courses Carrefour', 5840, -2, '18:20', 'groceries');
+    await spend('Cadeau Julie', 3200, -3, '12:10', 'birthday');
+    await spend('Ciné', 1150, -1, '19:45', 'friends');
+    await spend('Pharmacie', 1290, -8, '10:05', 'health');
+    await spend('Boulangerie', 420, -8, '08:30', 'groceries');
+    await spend('Salle de sport', 2990, -12, '07:00', 'sport');
+    await spend('Courses Lidl', 6310, -34, '17:40', 'groceries');
+    await spend('Resto', 4200, -40, '20:30', 'friends');
+    await spend('Abonnement sport', 2990, -42, '07:00', 'sport');
+
     const year = Number(t.slice(0, 4));
     const bday = (name: string, offset: number, age: number | null, catKey: string) => {
       const k = shiftDay(t, offset);
