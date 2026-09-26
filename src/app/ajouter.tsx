@@ -108,8 +108,9 @@ export default function AddSheet() {
         show(v === null ? "Pas d'objectif « fruits »" : `Fruits ${v}/${fruits?.target ?? '?'}`);
       },
     },
-    // Les deux premiers suivis de l'onglet Suivi : + un pas, « maintenant » pour une heure, « Levé » pour le sommeil.
-    ...(trackers ?? []).slice(0, 2).map((t) => ({
+    // Les deux premiers suivis saisis à la main (pas ceux de Health Connect) : + un pas, « maintenant »
+    // pour une heure, « Levé » pour le sommeil.
+    ...(trackers ?? []).filter((t) => t.source !== 'health').slice(0, 2).map((t) => ({
       label: t.kind === 'sleep' ? 'Levé maintenant' : t.kind === 'time' ? `${t.name} maintenant` : `+${fmtStep(t)}`,
       value:
         t.kind === 'sleep'
@@ -131,7 +132,7 @@ export default function AddSheet() {
           return;
         }
         const v = await mutate((db) => addTrackerValue(db, t.id, today, t.step));
-        show(`${t.name} ${fmtValue(t, v)}`);
+        if (v !== null) show(`${t.name} ${fmtValue(t, v)}`);
       },
     })),
   ];

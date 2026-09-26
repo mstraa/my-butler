@@ -204,6 +204,7 @@ function TrackerCard({
   };
 
   const [main, rest] = bigParts(t, cur);
+  const locked = t.source === 'health';
   const canLower = t.kind === 'time' ? cur !== null : !!cur;
   const trend = t.avg && t.prevAvg ? Math.round((t.avg / t.prevAvg - 1) * 100) : null;
   const trendText = trend !== null ? ` · ${trend > 0 ? '+' : trend < 0 ? '−' : ''}${Math.abs(trend)} % vs semaine passée` : '';
@@ -270,7 +271,18 @@ function TrackerCard({
       </View>
 
       {night ? (
-        <SleepTiles id={t.id} day={day} isToday={isToday} slept={night.slept ?? null} woke={night.woke ?? null} />
+        <SleepTiles id={t.id} day={day} isToday={isToday} slept={night.slept ?? null} woke={night.woke ?? null} locked={locked} />
+      ) : locked ? (
+        <View style={{ alignItems: 'center', gap: 2 }} accessibilityLiveRegion="polite">
+          <AppText
+            style={styles.big}
+            color={cur === null ? colors.textMuted : colors.text}
+            accessibilityLabel={`${t.name} : ${cur === null ? 'rien pour l’instant' : fmtValue(t, cur)}`}>
+            {main}
+            <AppText style={styles.bigRest}>{rest}</AppText>
+          </AppText>
+          <AppText variant="caption">{isToday ? "aujourd'hui" : mediumDayLabel(day)} · Health Connect</AppText>
+        </View>
       ) : (
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         <Pressable
@@ -351,8 +363,8 @@ function TrackerCard({
 
 /** Sommeil : coucher de la veille et lever du jour, comme dans la première version de l'onglet. */
 function SleepTiles({
-  id, day, isToday, slept, woke,
-}: { id: number; day: string; isToday: boolean; slept: number | null; woke: number | null }) {
+  id, day, isToday, slept, woke, locked,
+}: { id: number; day: string; isToday: boolean; slept: number | null; woke: number | null; locked: boolean }) {
   const mutate = useDbMutation();
   const today = todayKey();
   const open = (field: 'slept' | 'woke', value: number | null) =>
@@ -366,12 +378,16 @@ function SleepTiles({
     <View style={{ flexDirection: 'row', gap: 10 }}>
       <View style={styles.tile}>
         <AppText variant="caption">Couché ({isToday ? 'hier' : 'la veille'})</AppText>
-        <Pressable onPress={() => open('slept', slept)} accessibilityRole="button" accessibilityLabel="Modifier l'heure de coucher">
+        <Pressable
+          onPress={() => open('slept', slept)}
+          disabled={locked}
+          accessibilityRole={locked ? 'text' : 'button'}
+          accessibilityLabel={locked ? undefined : "Modifier l'heure de coucher"}>
           <AppText style={styles.bigTime} color={slept !== null ? colors.text : colors.textMuted}>
             {slept !== null ? fmtClock(slept) : '--:--'}
           </AppText>
         </Pressable>
-        {isToday ? (
+        {locked ? null : isToday ? (
           <Pressable onPress={goToBed} accessibilityRole="button" style={({ pressed }) => [styles.tileBtn, styles.tileBtnGhost, pressed && { opacity: 0.7 }]}>
             <AppText style={{ fontFamily: fonts.bodySemiBold, fontSize: 13 }}>Je me couche</AppText>
           </Pressable>
@@ -385,16 +401,22 @@ function SleepTiles({
       </View>
       <View style={styles.tile}>
         <AppText variant="caption">Levé ({isToday ? 'auj.' : 'ce jour'})</AppText>
-        <Pressable onPress={() => open('woke', woke)} accessibilityRole="button" accessibilityLabel="Modifier l'heure de lever">
+        <Pressable
+          onPress={() => open('woke', woke)}
+          disabled={locked}
+          accessibilityRole={locked ? 'text' : 'button'}
+          accessibilityLabel={locked ? undefined : "Modifier l'heure de lever"}>
           <AppText style={styles.bigTime} color={woke !== null ? colors.text : colors.textMuted}>
             {woke !== null ? fmtClock(woke) : '--:--'}
           </AppText>
         </Pressable>
-        <Pressable onPress={() => open('woke', woke)} accessibilityRole="button" style={[styles.tileBtn, styles.tileBtnFill]}>
-          <AppText style={{ fontFamily: fonts.bodySemiBold, fontSize: 13 }} color="#D4D4D8">
-            Modifier
-          </AppText>
-        </Pressable>
+        {!locked && (
+          <Pressable onPress={() => open('woke', woke)} accessibilityRole="button" style={[styles.tileBtn, styles.tileBtnFill]}>
+            <AppText style={{ fontFamily: fonts.bodySemiBold, fontSize: 13 }} color="#D4D4D8">
+              Modifier
+            </AppText>
+          </Pressable>
+        )}
       </View>
     </View>
   );

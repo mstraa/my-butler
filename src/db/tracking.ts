@@ -174,8 +174,15 @@ export async function deleteTracker(db: SQLiteDatabase, id: number) {
   });
 }
 
+/** Un suivi relié à Health Connect ne se modifie pas à la main : ses valeurs viennent de l'import. */
+async function isImported(db: SQLiteDatabase, id: number) {
+  const row = await db.getFirstAsync<{ source: TrackerSource }>('SELECT source FROM trackers WHERE id = ?', id);
+  return row?.source === 'health';
+}
+
 /** Remplace la valeur d'un jour ; `null` l'efface. */
 export async function setTrackerValue(db: SQLiteDatabase, id: number, day: DayKey, value: number | null) {
+  if (await isImported(db, id)) return;
   if (value === null) {
     await db.runAsync('DELETE FROM tracker_entries WHERE tracker_id = ? AND day = ?', id, day);
     return;
@@ -188,6 +195,7 @@ export async function setTrackerValue(db: SQLiteDatabase, id: number, day: DayKe
 
 /** Sommeil : note le coucher ou le lever d'une nuit (`null` l'efface) et recalcule sa durée. */
 export async function setSleepTime(db: SQLiteDatabase, id: number, day: DayKey, field: 'slept' | 'woke', minutes: number | null) {
+  if (await isImported(db, id)) return;
   const col = field === 'slept' ? 'slept_at' : 'woke_at';
   await db.withTransactionAsync(async () => {
     await db.runAsync(
@@ -212,6 +220,7 @@ export function bedtimeTarget(now: Date, today: DayKey) {
 
 /** Ajoute `delta` à la valeur du jour (jamais sous 0) et renvoie la nouvelle valeur. */
 export async function addTrackerValue(db: SQLiteDatabase, id: number, day: DayKey, delta: number) {
+  if (await isImported(db, id)) return null;
   await db.runAsync(
     `INSERT INTO tracker_entries (tracker_id, day, value) VALUES (?, ?, MAX(0, ?))
      ON CONFLICT(tracker_id, day) DO UPDATE SET value = MAX(0, ROUND(value + ?, 3))`,
