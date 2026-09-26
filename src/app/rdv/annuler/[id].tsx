@@ -101,7 +101,8 @@ export default function CancelEventSheet() {
 
             <View style={{ gap: 8 }} accessibilityRole="radiogroup">
               <AppText style={styles.label}>Que faire de l&apos;info ?</AppText>
-              {MODES.map((o) => {
+              {/* Un rdv Google supprimé reviendrait à la synchro suivante : pas de suppression. */}
+              {MODES.filter((o) => o.value !== 'delete' || e.source !== 'google').map((o) => {
                 const sel = o.value === mode;
                 return (
                   <Pressable

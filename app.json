@@ -36,6 +36,12 @@
       "expo-sqlite",
       "expo-font",
       [
+        "expo-calendar",
+        {
+          "calendarPermission": "L'agenda du téléphone sert à afficher tes rendez-vous Google Agenda dans l'app."
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "backgroundColor": "#000000",

@@ -39,6 +39,10 @@ src/
 Tout est stocké en local (expo-sqlite). Le schéma évolue par migrations numérotées dans `src/db/migrations.ts` :
 ne jamais modifier une migration existante, en ajouter une nouvelle.
 
+Google Agenda : import en lecture seule des agendas synchronisés sur le téléphone (`expo-calendar`), choisis dans
+Réglages avec une catégorie par agenda. Relu à chaque ouverture de l'app (2 mois passés, 1 an à venir) ; titre,
+horaires et lieu viennent de Google, catégorie, notes, rappel, échéance et annulation restent dans l'app.
+
 Au premier lancement, des données d'exemple sont créées autour d'aujourd'hui ; elles s'effacent depuis Réglages.
 
 ## Branches et versions

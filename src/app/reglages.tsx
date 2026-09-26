@@ -5,6 +5,7 @@ import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, View } f
 import { AppText } from '@/components/app-text';
 import { showDialog } from '@/components/dialog';
 import { Chip, SwitchRow } from '@/components/form/fields';
+import { GoogleCalendarSettings } from '@/components/google-calendar-settings';
 import { BackHeader, Screen } from '@/components/screen';
 import { getNotifSettings, type NotifSettings, setNotifSetting } from '@/db/notification-plan';
 import { clearAllData } from '@/db/seed';
@@ -15,13 +16,13 @@ import { colors, fonts } from '@/theme/tokens';
 
 const JOURNEE_TIMES = ['07:00', '07:30', '08:00', '09:00'];
 
-type Category = { id: number; name: string; color: string };
+type Category = { id: number; key: string; name: string; color: string };
 
 export default function SettingsScreen() {
   const mutate = useDbMutation();
   const { data } = useDbQuery(async (db) => {
     const [categories, demo, notif, allowed] = await Promise.all([
-      db.getAllAsync<Category>('SELECT id, name, color FROM categories ORDER BY sort'),
+      db.getAllAsync<Category>('SELECT id, key, name, color FROM categories ORDER BY sort'),
       db.getFirstAsync<{ value: string }>("SELECT value FROM settings WHERE key = 'demo_data'"),
       getNotifSettings(db),
       notificationsAllowed(),
@@ -123,15 +124,12 @@ export default function SettingsScreen() {
             </View>
           ))}
           <AppText variant="caption" style={styles.hint}>
-            Modifier, ajouter et associer aux agendas Google : prochaine étape.
+            Chaque agenda Google importé peut recevoir une catégorie, juste en dessous.
           </AppText>
         </Section>
 
         <Section title="Google Agenda">
-          <AppText variant="body" color={colors.textSecondary} style={{ lineHeight: 20 }}>
-            Import en lecture seule des agendas du téléphone (rien n&apos;est renvoyé vers Google). Arrive à une
-            prochaine étape.
-          </AppText>
+          <GoogleCalendarSettings categories={data?.categories ?? []} />
         </Section>
 
         {data?.demo && (

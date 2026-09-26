@@ -206,15 +206,18 @@ export default function EventSheet() {
                 pointerEvents={detail ? 'auto' : 'none'}
                 style={[styles.footer, { gap: 10, paddingBottom: BOTTOM }, detailBtnStyle]}>
                 <View style={styles.row}>
-                  <Pressable
-                    onPress={() => router.push({ pathname: '/rdv/modifier/[id]', params: { id: String(e.id) } })}
-                    accessibilityRole="button"
-                    style={[styles.btn, styles.btnGhost, { flex: 1 }]}>
-                    <Icon name="arrowRight" size={16} color="#D4D4D8" />
-                    <AppText variant="bodyStrong" color="#D4D4D8" style={{ fontSize: 15 }}>
-                      Reporter
-                    </AppText>
-                  </Pressable>
+                  {/* Les horaires d'un rdv Google se changent dans Google Agenda. */}
+                  {e.source !== 'google' && (
+                    <Pressable
+                      onPress={() => router.push({ pathname: '/rdv/modifier/[id]', params: { id: String(e.id) } })}
+                      accessibilityRole="button"
+                      style={[styles.btn, styles.btnGhost, { flex: 1 }]}>
+                      <Icon name="arrowRight" size={16} color="#D4D4D8" />
+                      <AppText variant="bodyStrong" color="#D4D4D8" style={{ fontSize: 15 }}>
+                        Reporter
+                      </AppText>
+                    </Pressable>
+                  )}
                   <Pressable
                     onPress={async () => {
                       const copy = await mutate((db) => duplicateEvent(db, e.id));
