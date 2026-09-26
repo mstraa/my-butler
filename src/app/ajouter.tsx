@@ -14,11 +14,11 @@ import { useDbMutation, useDbQuery } from '@/db/use-query';
 import { mediumDayLabel, todayKey } from '@/lib/dates';
 import { categoryColors, colors, fonts, withAlpha } from '@/theme/tokens';
 
-type Tile = { label: string; icon: IconName; color: string; href?: '/rdv/nouveau' };
+type Tile = { label: string; icon: IconName; color: string; href?: '/rdv/nouveau' | '/tache/nouvelle' };
 
 const TILES: Tile[] = [
   { label: 'Rendez-vous', icon: 'calendar', color: categoryColors.work, href: '/rdv/nouveau' },
-  { label: 'Tâche', icon: 'task', color: categoryColors.friends },
+  { label: 'Tâche', icon: 'task', color: categoryColors.friends, href: '/tache/nouvelle' },
   { label: 'Dépense', icon: 'wallet', color: categoryColors.groceries },
   { label: 'Objectif', icon: 'target', color: categoryColors.health },
   { label: 'Lever / coucher', icon: 'moon', color: categoryColors.sport },

@@ -169,6 +169,14 @@ const MIGRATIONS: string[] = [
   ALTER TABLE events ADD COLUMN recurrence TEXT NOT NULL DEFAULT 'none'; -- none | daily | weekly | monthly | yearly
   ALTER TABLE events ADD COLUMN reminder_min INTEGER;                   -- minutes avant ; NULL = pas de rappel
   `,
+  /* v3 — tâches : rappel, affichage « En retard », relance */ `
+  ALTER TABLE tasks ADD COLUMN reminder_min INTEGER;                    -- minutes avant l'échéance ; NULL = pas de rappel
+  ALTER TABLE tasks ADD COLUMN show_late INTEGER NOT NULL DEFAULT 1;    -- échéance passée → « En retard »
+  ALTER TABLE tasks ADD COLUMN nag_at TEXT;                             -- relance quotidienne 'HH:mm' ; NULL = aucune
+  `,
+  /* v4 — note des tâches (Markdown) */ `
+  ALTER TABLE tasks ADD COLUMN notes TEXT;
+  `,
 ];
 
 export async function migrateDbIfNeeded(db: SQLiteDatabase) {

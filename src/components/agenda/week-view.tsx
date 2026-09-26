@@ -6,7 +6,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { type CarouselHandle, PeriodCarousel } from '@/components/agenda/period-carousel';
 import { PeriodHeader } from '@/components/agenda/period-header';
-import { useItemPress } from '@/components/agenda/use-item-press';
+import { useItemLongPress, useItemPress } from '@/components/agenda/use-item-press';
 import { AppText } from '@/components/app-text';
 import { Icon } from '@/components/icon';
 import { useTabBarSpace } from '@/components/tab-bar';
@@ -231,6 +231,7 @@ function WeekPage({ weekStart, onPickDay }: { weekStart: string; onPickDay: (day
 
 function EventBlock({ block, onPress }: { block: Block; onPress: () => void }) {
   const it = block.item;
+  const onLongPress = useItemLongPress();
   const isTask = it.kind === 'task';
   const look = it.cancelled
     ? { borderWidth: 1, borderStyle: 'dashed' as const, borderColor: '#4A4A50' }
@@ -240,6 +241,7 @@ function EventBlock({ block, onPress }: { block: Block; onPress: () => void }) {
   return (
     <Pressable
       onPress={onPress}
+      onLongPress={() => onLongPress(it)}
       accessibilityRole="button"
       accessibilityLabel={`${it.title}, ${it.time}${it.cancelled ? ', annulé' : ''}`}
       style={[styles.block, look, it.done && { opacity: 0.5 }]}>

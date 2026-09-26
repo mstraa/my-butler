@@ -56,6 +56,16 @@ export default function RootLayout() {
               name="rdv/apercu/[id]"
               options={{ presentation: 'transparentModal', animation: 'none', contentStyle: { backgroundColor: 'transparent' } }}
             />
+            <Stack.Screen name="tache/nouvelle" options={{ animation: 'slide_from_bottom' }} />
+            <Stack.Screen name="tache/modifier/[id]" options={{ animation: 'slide_from_bottom' }} />
+            <Stack.Screen
+              name="tache/apercu/[id]"
+              options={{ presentation: 'transparentModal', animation: 'none', contentStyle: { backgroundColor: 'transparent' } }}
+            />
+            <Stack.Screen
+              name="tache/terminer/[id]"
+              options={{ presentation: 'transparentModal', animation: 'none', contentStyle: { backgroundColor: 'transparent' } }}
+            />
             <Stack.Screen
               name="rdv/annuler/[id]"
               options={{ presentation: 'transparentModal', animation: 'none', contentStyle: { backgroundColor: 'transparent' } }}

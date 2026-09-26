@@ -51,7 +51,7 @@ export function DeadlineSection({ event: e }: { event: EventRecord }) {
               mutate((db) =>
                 postponeLate(
                   db,
-                  { type: 'event', id: e.id, title: e.title, due: d.at, eventAt: e.startsAt, color: '' },
+                  { type: 'event', id: e.id, title: e.title, due: d.at, eventAt: e.startsAt, color: '', icon: 'calendar', category: null, estimateCents: null },
                   `${shiftDay(dayOf(d.at), 1)}T${timeOf(d.at)}`,
                 ),
               )
