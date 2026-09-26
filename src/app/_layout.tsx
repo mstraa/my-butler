@@ -56,6 +56,22 @@ export default function RootLayout() {
               name="rdv/apercu/[id]"
               options={{ presentation: 'transparentModal', animation: 'none', contentStyle: { backgroundColor: 'transparent' } }}
             />
+            <Stack.Screen
+              name="depense/nouvelle"
+              options={{ animation: 'slide_from_bottom', contentStyle: { backgroundColor: colors.sheet } }}
+            />
+            <Stack.Screen
+              name="depense/mois"
+              options={{ presentation: 'transparentModal', animation: 'none', contentStyle: { backgroundColor: 'transparent' } }}
+            />
+            <Stack.Screen
+              name="depense/filtre"
+              options={{ presentation: 'transparentModal', animation: 'none', contentStyle: { backgroundColor: 'transparent' } }}
+            />
+            <Stack.Screen
+              name="depense/budget"
+              options={{ presentation: 'transparentModal', animation: 'none', contentStyle: { backgroundColor: 'transparent' } }}
+            />
             <Stack.Screen name="anniversaires/index" options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="anniversaires/[id]" options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="anniversaires/nouveau" options={{ animation: 'slide_from_bottom' }} />
