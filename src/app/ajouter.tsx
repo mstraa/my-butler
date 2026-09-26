@@ -14,7 +14,7 @@ import { useDbMutation, useDbQuery } from '@/db/use-query';
 import { mediumDayLabel, todayKey } from '@/lib/dates';
 import { categoryColors, colors, fonts, withAlpha } from '@/theme/tokens';
 
-type Tile = { label: string; icon: IconName; color: string; href?: '/rdv/nouveau' | '/tache/nouvelle' };
+type Tile = { label: string; icon: IconName; color: string; href?: '/rdv/nouveau' | '/tache/nouvelle' | '/anniversaires/nouveau' };
 
 const TILES: Tile[] = [
   { label: 'Rendez-vous', icon: 'calendar', color: categoryColors.work, href: '/rdv/nouveau' },
@@ -24,7 +24,7 @@ const TILES: Tile[] = [
   { label: 'Lever / coucher', icon: 'moon', color: categoryColors.sport },
   { label: 'E-liquide', icon: 'drop', color: categoryColors.work },
   { label: "Envie d'achat", icon: 'heart', color: categoryColors.family },
-  { label: 'Anniversaire', icon: 'cake', color: categoryColors.birthday },
+  { label: 'Anniversaire', icon: 'cake', color: categoryColors.birthday, href: '/anniversaires/nouveau' },
   { label: 'Note du jour', icon: 'note', color: colors.textSecondary },
 ];
 

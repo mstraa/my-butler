@@ -136,8 +136,8 @@ export function ItemRow({ item, onPress }: { item: AgendaItem; onPress?: (i: Age
     <Pressable
       onPress={() => onPress?.(item)}
       onLongPress={() => onLongPress(item)}
-      disabled={!onPress || item.kind === 'birthday'}
-      accessibilityRole={item.kind === 'birthday' ? 'text' : 'button'}
+      disabled={!onPress}
+      accessibilityRole="button"
       accessibilityLabel={a11y}
       style={[styles.row, item.cancelled && styles.rowCancelled]}>
       <View style={[styles.iconBox, { backgroundColor: muted ? '#1B1B1F' : withAlpha(item.color, 0.13) }]}>

@@ -237,7 +237,6 @@ function ItemCard({ item, state, remaining, onPress }: { item: AgendaItem; state
     <Pressable
       onPress={onPress}
       onLongPress={() => onLongPress(item)}
-      disabled={item.kind === 'birthday'}
       accessibilityRole="button"
       style={[
         styles.card,

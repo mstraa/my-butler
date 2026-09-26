@@ -81,6 +81,17 @@ export async function seedDemoData(db: SQLiteDatabase) {
     await bday('Julie', 1, 30, 'friends');
     await bday('Marc', 8, 34, 'friends');
     await bday('Maman', 22, null, 'family');
+    const marc = (await db.getFirstAsync<{ id: number }>("SELECT id FROM birthdays WHERE name = 'Marc'"))!.id;
+    for (const [title, price] of [['Places de concert', 9000], ['Bon pour un resto', null]] as const) {
+      await db.runAsync(
+        'INSERT INTO gift_ideas (birthday_id, title, price_cents, created_at) VALUES (?, ?, ?, ?)', marc, title, price, created,
+      );
+    }
+    for (const [ago, title, price] of [[1, 'Casque vélo', 6500], [2, 'Jeu de société', 4000], [3, 'Bouteille de whisky', 5500]] as const) {
+      await db.runAsync(
+        'INSERT INTO gifts_given (birthday_id, year, title, price_cents) VALUES (?, ?, ?, ?)', marc, year - ago, title, price,
+      );
+    }
 
     const goal = (key: string, title: string, kind: string, target: number, unit: string | null, sort: number) =>
       db.runAsync(
