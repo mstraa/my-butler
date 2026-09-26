@@ -1,16 +1,26 @@
 # Seules les PR venant de develop peuvent viser main.
+# Tourne aussi à chaque push sur develop : le check « source » est posé sur le commit de tête de la PR
+# même si l'événement pull_request ne déclenche rien. Lançable à la main (onglet Actions).
 name: Source de la PR vers main
 
 on:
   pull_request:
+    types: [opened, reopened, synchronize, edited]
     branches: [main]
+  push:
+    branches: [develop]
+  workflow_dispatch:
 
 jobs:
   source:
     runs-on: ubuntu-latest
     steps:
       - name: Vérifier que la PR vient de develop
-        if: github.head_ref != 'develop'
+        env:
+          SOURCE: ${{ github.head_ref || github.ref_name }}
         run: |
-          echo "::error::Les PR vers main doivent venir de develop (reçu : ${{ github.head_ref }})."
-          exit 1
+          if [ "$SOURCE" != "develop" ]; then
+            echo "::error::Les PR vers main doivent venir de develop (reçu : $SOURCE)."
+            exit 1
+          fi
+          echo "Source : develop ✓"

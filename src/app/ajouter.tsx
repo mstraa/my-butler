@@ -1,5 +1,5 @@
 import * as Haptics from 'expo-haptics';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { BackHandler, Pressable, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -32,6 +32,9 @@ const TILES: Tile[] = [
 export default function AddSheet() {
   const insets = useSafeAreaInsets();
   const today = todayKey();
+  // Jour visé par les créations (jour choisi dans l'agenda) ; la saisie rapide reste sur aujourd'hui.
+  const { day: dayParam } = useLocalSearchParams<{ day?: string }>();
+  const day = dayParam && /^\d{4}-\d{2}-\d{2}$/.test(dayParam) ? dayParam : today;
   const mutate = useDbMutation();
   const { data: stats } = useDbQuery((db) => getDayStats(db, today), today);
   const [toast, setToast] = useState<{ text: string; n: number } | null>(null);
@@ -55,9 +58,12 @@ export default function AddSheet() {
     }));
   };
 
+  const navigation = useNavigation();
   // Bouton retour d'Android : même fermeture animée.
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      // Un écran ouvert par-dessus (ex. l'édition) gère son propre retour.
+      if (!navigation.isFocused()) return false;
       close();
       return true;
     });
@@ -139,7 +145,7 @@ export default function AddSheet() {
             Ajouter
           </AppText>
           <AppText variant="caption" style={{ fontSize: 13 }}>
-            pour {mediumDayLabel(today)}
+            pour {mediumDayLabel(day)}
           </AppText>
         </View>
 
@@ -150,7 +156,7 @@ export default function AddSheet() {
                 accessibilityRole="button"
                 onPress={() =>
                   close(() =>
-                    t.href ? router.replace(t.href) : router.replace({ pathname: '/a-venir', params: { titre: t.label } }),
+                    t.href ? router.replace({ pathname: t.href, params: { day } }) : router.replace({ pathname: '/a-venir', params: { titre: t.label } }),
                   )
                 }
                 style={({ pressed }) => [styles.tile, pressed && { backgroundColor: '#2A2A2F' }]}>
@@ -168,7 +174,7 @@ export default function AddSheet() {
         <View style={{ gap: 10 }}>
           <View style={styles.quickHead}>
             <AppText variant="label" color={colors.textSecondary}>
-              Saisie rapide
+              Saisie rapide{day !== today ? ' · aujourd’hui' : ''}
             </AppText>
             {toast && (
               <Animated.View key={toast.n} entering={FadeInDown.duration(250)} style={styles.toast} accessibilityLiveRegion="polite">

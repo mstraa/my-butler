@@ -1,6 +1,6 @@
 import * as Haptics from 'expo-haptics';
-import { Link } from 'expo-router';
-import { useLayoutEffect, useRef, useState } from 'react';
+import { Link, router } from 'expo-router';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { type FlatList, type LayoutChangeEvent, Pressable, StyleSheet, View } from 'react-native';
 import Animated, { FadeInDown, useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
@@ -11,8 +11,10 @@ import { AppText } from '@/components/app-text';
 import { Icon } from '@/components/icon';
 import { type AgendaDay, getAgendaDays, getDayStats, getLateItems } from '@/db/agenda';
 import { useDbQuery } from '@/db/use-query';
+import { useTabBarSpace } from '@/components/tab-bar';
 import { monthName, shiftDay, todayKey, yearOf } from '@/lib/dates';
-import { colors, fonts, TAB_BAR_CLEARANCE } from '@/theme/tokens';
+import { setSelectedDay } from '@/lib/selected-day';
+import { colors, fonts } from '@/theme/tokens';
 
 /*
  * Vue Liste :
@@ -35,14 +37,21 @@ const CHUNK = 60;
 /** Jours ouverts / fermés à la main : gardés tant que l'app tourne (remis à zéro à la fermeture). */
 const openedDays = new Set<string>();
 const closedDays = new Set<string>(); // pour aujourd'hui, ouvert par défaut
+/** Jours ouverts à la main, du plus ancien au plus récent : le dernier est la cible du bouton +. */
+const openOrder: string[] = [];
 let listShown = false;
 
-export function ListView({ switcher }: { switcher: React.ReactNode }) {
+export function ListView() {
+  const bottomSpace = useTabBarSpace();
   const today = todayKey();
   const list = useRef<FlatList<AgendaDay>>(null);
   const [range, setRange] = useState({ from: shiftDay(today, -LOAD_BEFORE), to: shiftDay(today, LOAD_AFTER) });
   const [opened, setOpened] = useState(() => new Set(openedDays));
   const [closed, setClosed] = useState(() => new Set(closedDays));
+  // Le bouton + vise le dernier jour ouvert (sinon aujourd'hui).
+  useEffect(() => {
+    setSelectedDay(openOrder.at(-1) ?? null);
+  }, []);
   const [justOpened, setJustOpened] = useState<string | null>(null); // seul jour dont l'ouverture s'anime
   const [heights, setHeights] = useState<Record<string, number>>({});
   // Premier jour visible (titre du mois) et éloignement d'aujourd'hui : mis à jour seulement
@@ -115,7 +124,17 @@ export function ListView({ switcher }: { switcher: React.ReactNode }) {
       else openedDays.add(day);
       setOpened(new Set(openedDays));
     }
+    const i = openOrder.indexOf(day);
+    if (i >= 0) openOrder.splice(i, 1);
+    if (!open) openOrder.push(day);
+    setSelectedDay(openOrder.at(-1) ?? null);
     setJustOpened(open ? null : day);
+  };
+
+  /** Appui long sur un jour : ajouter directement à cette date. */
+  const addTo = (day: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    router.push({ pathname: '/ajouter', params: { day } });
   };
 
   const goToday = () => {
@@ -158,7 +177,6 @@ export function ListView({ switcher }: { switcher: React.ReactNode }) {
         </Link>
       </View>
 
-      {switcher}
 
       {lateCount > 0 && (
         <Animated.View entering={animateIn ? FadeInDown.duration(300) : undefined} style={{ paddingHorizontal: 12 }}>
@@ -194,7 +212,7 @@ export function ListView({ switcher }: { switcher: React.ReactNode }) {
           onEndReached={() => setRange((r) => ({ ...r, to: shiftDay(r.to, CHUNK) }))}
           onEndReachedThreshold={3}
           windowSize={9}
-          contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: TAB_BAR_CLEARANCE }}
+          contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: bottomSpace }}
           renderItem={({ item, index }) => {
             const open = isOpen(item.day);
             return (
@@ -215,6 +233,7 @@ export function ListView({ switcher }: { switcher: React.ReactNode }) {
                   open={open}
                   stats={item.day === today ? todayStats : undefined}
                   onToggle={() => toggleDay(item.day)}
+                  onLongPress={() => addTo(item.day)}
                   animate={item.day === justOpened}
                   onItemPress={onItemPress}
                 />

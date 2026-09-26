@@ -8,6 +8,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
+import { DialogHost } from '@/components/dialog';
 import { migrateDbIfNeeded } from '@/db/migrations';
 import { colors } from '@/theme/tokens';
 
@@ -50,8 +51,17 @@ export default function RootLayout() {
             <Stack.Screen name="reglages" options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="a-venir" options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="rdv/nouveau" options={{ animation: 'slide_from_bottom' }} />
-            <Stack.Screen name="rdv/[id]" options={{ animation: 'slide_from_bottom' }} />
+            <Stack.Screen name="rdv/modifier/[id]" options={{ animation: 'slide_from_bottom' }} />
+            <Stack.Screen
+              name="rdv/apercu/[id]"
+              options={{ presentation: 'transparentModal', animation: 'none', contentStyle: { backgroundColor: 'transparent' } }}
+            />
+            <Stack.Screen
+              name="rdv/annuler/[id]"
+              options={{ presentation: 'transparentModal', animation: 'none', contentStyle: { backgroundColor: 'transparent' } }}
+            />
           </Stack>
+          <DialogHost />
         </SQLiteProvider>
       </ThemeProvider>
     </GestureHandlerRootView>

@@ -1,37 +1,21 @@
-import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown, LinearTransition } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppText } from '@/components/app-text';
+import { showDialog } from '@/components/dialog';
+import { DateTimeSheet } from '@/components/form/date-time-sheet';
 import { Chip, FieldLabel, OptionSheet, PickerField, SwitchRow, TextField } from '@/components/form/fields';
 import { Icon } from '@/components/icon';
-import type { Recurrence } from '@/db/agenda';
 import type { Category, EventDraft } from '@/db/events';
+import { RECURRENCES, REMINDERS } from '@/lib/event-options';
 import { dateFieldLabel, dayOf, minutesOf, parseDay, shiftDay, type Stamp, stamp, timeOf } from '@/lib/dates';
 import { colors, fonts } from '@/theme/tokens';
 
-export const REMINDERS: { value: number | null; label: string }[] = [
-  { value: null, label: 'Aucun' },
-  { value: 0, label: "À l'heure" },
-  { value: 5, label: '5 min avant' },
-  { value: 15, label: '15 min avant' },
-  { value: 30, label: '30 min avant' },
-  { value: 60, label: '1 h avant' },
-  { value: 120, label: '2 h avant' },
-  { value: 1440, label: '1 jour avant' },
-];
-
-export const RECURRENCES: { value: Recurrence; label: string }[] = [
-  { value: 'none', label: 'Jamais' },
-  { value: 'daily', label: 'Chaque jour' },
-  { value: 'weekly', label: 'Chaque semaine' },
-  { value: 'monthly', label: 'Chaque mois' },
-  { value: 'yearly', label: 'Chaque année' },
-];
+export { RECURRENCES, REMINDERS };
 
 type Props = {
   title: string;
@@ -42,44 +26,20 @@ type Props = {
   readOnlyNote?: string;
 };
 
-const pad = (n: number) => String(n).padStart(2, '0');
-const hhmmOf = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 const addMinutes = (s: Stamp, min: number) => {
   const d = parseDay(dayOf(s));
   d.setHours(0, minutesOf(timeOf(s)) + min, 0, 0);
   return stamp(d);
 };
-const toDate = (s: Stamp) => {
-  const d = parseDay(dayOf(s));
-  d.setHours(0, minutesOf(timeOf(s)), 0, 0);
-  return d;
-};
-
-function pickDate(value: Stamp, onPick: (day: string) => void) {
-  DateTimePickerAndroid.open({
-    value: toDate(value),
-    mode: 'date',
-    onValueChange: (_e, d) => onPick(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`),
-  });
-}
-function pickTime(value: Stamp, onPick: (hhmm: string) => void) {
-  DateTimePickerAndroid.open({
-    value: toDate(value),
-    mode: 'time',
-    is24Hour: true,
-    onValueChange: (_e, d) => onPick(hhmmOf(d)),
-  });
-}
 
 /** Formulaire « Nouveau rendez-vous » / « Modifier le rendez-vous » (maquette HF-NouveauRdv). */
 export function EventForm({ title, initial, categories, onSave, onDelete, readOnlyNote }: Props) {
-  const [d, setD] = useState<EventDraft>(initial);
-  const [sheet, setSheet] = useState<'reminder' | 'repeat' | null>(null);
+  const [d, setD] = useState<EventDraft>(() => ({ ...initial, notes: initial.notes ?? '', location: initial.location ?? '' }));
+  const [sheet, setSheet] = useState<'reminder' | 'repeat' | 'when' | 'deadline' | null>(null);
   const [saving, setSaving] = useState(false);
   const [showErrors, setShowErrors] = useState(false);
 
   const set = (patch: Partial<EventDraft>) => setD((cur) => ({ ...cur, ...patch }));
-  const duration = d.endsAt ? Math.max(15, minutesBetween(d.startsAt, d.endsAt)) : 60;
 
   const titleError = !d.title.trim() ? 'Donne un titre au rendez-vous.' : null;
   const endError = !d.allDay && d.endsAt && d.endsAt <= d.startsAt ? 'La fin doit être après le début.' : null;
@@ -99,19 +59,19 @@ export function EventForm({ title, initial, categories, onSave, onDelete, readOn
       router.back();
     } catch (e) {
       setSaving(false);
-      Alert.alert("Impossible d'enregistrer", e instanceof Error ? e.message : String(e));
+      showDialog("Impossible d'enregistrer", e instanceof Error ? e.message : String(e));
     }
   };
 
   const confirmDelete = () =>
-    Alert.alert('Supprimer ce rendez-vous ?', "Il disparaît de l'agenda, sans historique.", [
+    showDialog('Supprimer ce rendez-vous ?', "Il disparaît de l'agenda, sans historique.", [
       { text: 'Garder', style: 'cancel' },
       {
         text: 'Supprimer',
         style: 'destructive',
         onPress: async () => {
           await onDelete?.();
-          router.back();
+          router.dismissAll(); // le rdv n'existe plus : retour à l'agenda
         },
       },
     ]);
@@ -179,45 +139,18 @@ export function EventForm({ title, initial, categories, onSave, onDelete, readOn
           </Animated.View>
 
           <Animated.View entering={FadeInDown.delay(120).duration(400)} style={{ gap: 6 }}>
-            <View style={styles.row}>
-              <PickerField
-                label="Date"
-                flex={2}
-                value={dateFieldLabel(dayOf(d.startsAt))}
-                onPress={() =>
-                  pickDate(d.startsAt, (day) => {
-                    const startsAt = `${day}T${timeOf(d.startsAt)}`;
-                    set({ startsAt, endsAt: d.endsAt ? addMinutes(startsAt, duration) : null });
-                  })
-                }
-              />
-              <PickerField
-                label="Début"
-                numeric
-                disabled={d.allDay}
-                value={timeOf(d.startsAt)}
-                onPress={() =>
-                  pickTime(d.startsAt, (hhmm) => {
-                    const startsAt = `${dayOf(d.startsAt)}T${hhmm}`;
-                    set({ startsAt, endsAt: addMinutes(startsAt, duration) });
-                  })
-                }
-              />
-              <PickerField
-                label="Fin"
-                numeric
-                disabled={d.allDay}
-                value={d.endsAt ? timeOf(d.endsAt) : '—'}
-                onPress={() =>
-                  pickTime(d.endsAt ?? addMinutes(d.startsAt, 60), (hhmm) => {
-                    // Une fin plus tôt que le début passe au lendemain (ex. 22:00 → 01:00).
-                    let endsAt = `${dayOf(d.startsAt)}T${hhmm}`;
-                    if (endsAt <= d.startsAt) endsAt = `${shiftDay(dayOf(d.startsAt), 1)}T${hhmm}`;
-                    set({ endsAt });
-                  })
-                }
-              />
-            </View>
+            <PickerField
+              label="Date et heure"
+              chevron
+              value={
+                d.allDay
+                  ? `${dateFieldLabel(dayOf(d.startsAt))} · toute la journée`
+                  : `${dateFieldLabel(dayOf(d.startsAt))} · ${timeOf(d.startsAt)} → ${d.endsAt ? timeOf(d.endsAt) : '—'}${
+                      d.endsAt && dayOf(d.endsAt) > dayOf(d.startsAt) ? ' (+1)' : ''
+                    }`
+              }
+              onPress={() => setSheet('when')}
+            />
             {showErrors && endError && <ErrorText>{endError}</ErrorText>}
           </Animated.View>
 
@@ -239,6 +172,15 @@ export function EventForm({ title, initial, categories, onSave, onDelete, readOn
             value={d.location}
             onChangeText={(location) => set({ location })}
             placeholder="Adresse ou lien"
+          />
+
+          <TextField
+            label="Note"
+            value={d.notes}
+            onChangeText={(notes) => set({ notes })}
+            placeholder="Code d'accès, choses à apporter…"
+            multiline
+            style={styles.noteInput}
           />
 
           <View style={styles.row}>
@@ -271,17 +213,13 @@ export function EventForm({ title, initial, categories, onSave, onDelete, readOn
                     label="Avant le"
                     flex={2}
                     value={dateFieldLabel(dayOf(d.deadline.at))}
-                    onPress={() =>
-                      pickDate(d.deadline!.at, (day) => set({ deadline: { ...d.deadline!, at: `${day}T${timeOf(d.deadline!.at)}` } }))
-                    }
+                    onPress={() => setSheet('deadline')}
                   />
                   <PickerField
                     label="Heure"
                     numeric
                     value={timeOf(d.deadline.at)}
-                    onPress={() =>
-                      pickTime(d.deadline!.at, (hhmm) => set({ deadline: { ...d.deadline!, at: `${dayOf(d.deadline!.at)}T${hhmm}` } }))
-                    }
+                    onPress={() => setSheet('deadline')}
                   />
                 </View>
                 <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -317,6 +255,30 @@ export function EventForm({ title, initial, categories, onSave, onDelete, readOn
         </ScrollView>
       </KeyboardAvoidingView>
 
+      <DateTimeSheet
+        visible={sheet === 'when'}
+        title="Rendez-vous"
+        allDay={d.allDay}
+        value={{ day: dayOf(d.startsAt), start: timeOf(d.startsAt), end: d.allDay ? null : timeOf(d.endsAt ?? addMinutes(d.startsAt, 60)) }}
+        onDone={({ day, start, end }) => {
+          if (d.allDay) return set({ startsAt: `${day}T00:00`, endsAt: null });
+          const startsAt = `${day}T${start}`;
+          // Une fin plus tôt que le début passe au lendemain (ex. 22:00 → 01:00).
+          const endsAt = end! > start ? `${day}T${end}` : `${shiftDay(day, 1)}T${end}`;
+          set({ startsAt, endsAt });
+        }}
+        onClose={() => setSheet(null)}
+      />
+      {d.deadline && (
+        <DateTimeSheet
+          visible={sheet === 'deadline'}
+          title="Échéance avant le rdv"
+          timeLabel="Heure"
+          value={{ day: dayOf(d.deadline.at), start: timeOf(d.deadline.at), end: null }}
+          onDone={({ day, start }) => set({ deadline: { ...d.deadline!, at: `${day}T${start}` } })}
+          onClose={() => setSheet(null)}
+        />
+      )}
       <OptionSheet
         visible={sheet === 'reminder'}
         title="Rappel"
@@ -345,9 +307,6 @@ function ErrorText({ children, warn }: { children: React.ReactNode; warn?: boole
   );
 }
 
-function minutesBetween(a: Stamp, b: Stamp) {
-  return Math.round((toDate(b).getTime() - toDate(a).getTime()) / 60000);
-}
 
 /** Pas d'échéance proposée dans le passé : au plus tôt aujourd'hui. */
 function maxDay(k: string) {
@@ -362,6 +321,7 @@ const styles = StyleSheet.create({
   body: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 40, gap: 14 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   row: { flexDirection: 'row', gap: 8 },
+  noteInput: { height: undefined, minHeight: 88, paddingTop: 12, paddingBottom: 12, textAlignVertical: 'top' },
   deadlineCard: {
     gap: 12,
     padding: 14,

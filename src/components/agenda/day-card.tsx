@@ -4,7 +4,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { AppText } from '@/components/app-text';
 import { Icon } from '@/components/icon';
 import type { AgendaDay, AgendaItem, DayStats } from '@/db/agenda';
-import { monthAbbr, shortDayLabel } from '@/lib/dates';
+import { monthAbbr, shortDayLabel, weekdayAbbr } from '@/lib/dates';
 import { colors, fonts, withAlpha } from '@/theme/tokens';
 
 type Props = {
@@ -13,6 +13,8 @@ type Props = {
   open: boolean;
   stats?: DayStats;
   onToggle: () => void;
+  /** Appui long : ajouter à ce jour. */
+  onLongPress?: () => void;
   onItemPress?: (item: AgendaItem) => void;
   /** Animer l'ouverture (seulement après un toucher, pas à l'affichage). */
   animate?: boolean;
@@ -21,10 +23,11 @@ type Props = {
 };
 
 /** Une carte par jour : gros chiffre fin ; ouverte, elle liste tout le jour (simple fondu à l'ouverture). */
-export function DayCard({ day, isToday, open, stats, onToggle, onItemPress, animate, numberStyle }: Props) {
+export function DayCard({ day, isToday, open, stats, onToggle, onLongPress, onItemPress, animate, numberStyle }: Props) {
   const n = Number(day.day.slice(8, 10));
   const label = isToday ? `${shortDayLabel(day.day)} · aujourd'hui` : shortDayLabel(day.day);
   const month = monthAbbr(day.day);
+  const weekday = weekdayAbbr(day.day);
 
   if (!open) {
     const summary = day.items.slice(0, 2);
@@ -32,11 +35,15 @@ export function DayCard({ day, isToday, open, stats, onToggle, onItemPress, anim
       <View>
         <Pressable
           onPress={onToggle}
+          onLongPress={onLongPress}
           accessibilityRole="button"
           accessibilityState={{ expanded: false }}
           accessibilityLabel={`Déplier ${label}`}
           style={({ pressed }) => [styles.closed, pressed && { opacity: 0.85 }]}>
           <View style={styles.closedLeft}>
+            <AppText variant="caption" color={colors.textMuted} style={styles.weekday}>
+              {weekday}
+            </AppText>
             <Animated.Text style={[styles.closedNumber, numberStyle]}>{n}</Animated.Text>
             <AppText variant="caption" color={colors.textMuted} style={styles.month}>
               {month}
@@ -73,17 +80,23 @@ export function DayCard({ day, isToday, open, stats, onToggle, onItemPress, anim
     <Animated.View entering={animate ? FadeIn.duration(160) : undefined} style={styles.open}>
       <Pressable
         onPress={onToggle}
+        onLongPress={onLongPress}
         accessibilityRole="button"
         accessibilityState={{ expanded: true }}
         accessibilityLabel={`Replier ${label}`}
         style={styles.openLeft}>
+        <AppText variant="caption" color={colors.textSecondary} style={styles.weekday}>
+          {weekday}
+        </AppText>
         <AppText variant="hero">{n}</AppText>
         <AppText variant="caption" color={colors.textSecondary} style={[styles.month, { marginBottom: 4 }]}>
           {month}
         </AppText>
-        <AppText variant="caption" color={colors.textSecondary} style={{ fontSize: 13 }}>
-          {label}
-        </AppText>
+        {isToday && (
+          <AppText variant="caption" color={colors.textSecondary} style={{ fontSize: 13 }}>
+            aujourd&apos;hui
+          </AppText>
+        )}
         <View style={{ marginTop: 10, gap: 2 }}>
           {statLines.map((s) => (
             <AppText key={s} variant="caption" style={{ fontSize: 11 }}>
@@ -166,10 +179,11 @@ const styles = StyleSheet.create({
   },
   closedLeft: { width: 104 },
   month: { fontFamily: fonts.bodyMedium, fontSize: 12, letterSpacing: 0.3, marginTop: -2 },
+  weekday: { fontFamily: fonts.bodyMedium, fontSize: 12, letterSpacing: 0.3, marginBottom: -2 },
   closedNumber: {
     fontFamily: fonts.displayThin,
-    fontSize: 60,
-    lineHeight: 62,
+    fontSize: 54,
+    lineHeight: 56,
     letterSpacing: -3,
     color: colors.textMuted,
   },

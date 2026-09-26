@@ -8,7 +8,7 @@ import { deleteEvent, getCategories, getEvent, updateEvent } from '@/db/events';
 import { useDbMutation, useDbQuery } from '@/db/use-query';
 import { colors } from '@/theme/tokens';
 
-/** Modifier un rendez-vous (en attendant l'écran « Détail » de la prochaine étape). */
+/** Modifier un rendez-vous (formulaire, ouvert depuis le détail). */
 export default function EditEventScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const eventId = Number(id);

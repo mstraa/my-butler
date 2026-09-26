@@ -1,10 +1,9 @@
 import { useState } from 'react';
-import { FlatList, Modal, Pressable, StyleSheet, TextInput, type TextInputProps, View } from 'react-native';
-import Animated, { FadeIn, SlideInDown } from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { FlatList, Pressable, StyleSheet, TextInput, type TextInputProps, View } from 'react-native';
 
 import { AppText } from '@/components/app-text';
 import { Icon, type IconName } from '@/components/icon';
+import { Sheet } from '@/components/sheet';
 import { colors, fonts } from '@/theme/tokens';
 
 export function FieldLabel({ children, nativeID }: { children: React.ReactNode; nativeID?: string }) {
@@ -164,43 +163,39 @@ export function OptionSheet<T>({
   onPick: (v: T) => void;
   onClose: () => void;
 }) {
-  const insets = useSafeAreaInsets();
+  if (!visible) return null;
   return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
-      <Animated.View entering={FadeIn.duration(200)} style={StyleSheet.absoluteFill}>
-        <Pressable accessibilityLabel="Fermer" onPress={onClose} style={{ flex: 1, backgroundColor: colors.veil }} />
-      </Animated.View>
-      <Animated.View
-        entering={SlideInDown.springify().damping(24).stiffness(240)}
-        style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}>
-        <View style={styles.grabber} />
-        <AppText variant="title" style={{ paddingHorizontal: 8, paddingBottom: 4 }}>
-          {title}
-        </AppText>
-        <FlatList
-          data={options}
-          keyExtractor={(o) => String(o.value)}
-          renderItem={({ item }) => {
-            const on = item.value === value;
-            return (
-              <Pressable
-                onPress={() => {
-                  onPick(item.value);
-                  onClose();
-                }}
-                accessibilityRole="radio"
-                accessibilityState={{ checked: on }}
-                style={({ pressed }) => [styles.option, (on || pressed) && { backgroundColor: colors.row }]}>
-                <AppText variant="bodyMedium" style={{ flex: 1, fontSize: 15 }}>
-                  {item.label}
-                </AppText>
-                {on && <Icon name="check" size={18} strokeWidth={2.2} />}
-              </Pressable>
-            );
-          }}
-        />
-      </Animated.View>
-    </Modal>
+    <Sheet inline onClosed={onClose} label={title} style={{ maxHeight: '70%', gap: 8, paddingHorizontal: 12 }}>
+      {(close) => (
+        <>
+          <AppText variant="title" style={{ paddingHorizontal: 8, paddingBottom: 4 }}>
+            {title}
+          </AppText>
+          <FlatList
+            data={options}
+            keyExtractor={(o) => String(o.value)}
+            renderItem={({ item }) => {
+              const on = item.value === value;
+              return (
+                <Pressable
+                  onPress={() => {
+                    onPick(item.value);
+                    close();
+                  }}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: on }}
+                  style={({ pressed }) => [styles.option, (on || pressed) && { backgroundColor: colors.row }]}>
+                  <AppText variant="bodyMedium" style={{ flex: 1, fontSize: 15 }}>
+                    {item.label}
+                  </AppText>
+                  {on && <Icon name="check" size={18} strokeWidth={2.2} />}
+                </Pressable>
+              );
+            }}
+          />
+        </>
+      )}
+    </Sheet>
   );
 }
 
@@ -235,21 +230,5 @@ const styles = StyleSheet.create({
     borderColor: colors.borderDashed,
     borderRadius: 999,
   },
-  sheet: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    maxHeight: '70%',
-    paddingTop: 10,
-    paddingHorizontal: 12,
-    gap: 8,
-    backgroundColor: colors.surfaceRaised,
-    borderTopWidth: 1,
-    borderColor: colors.border,
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-  },
-  grabber: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: '#3A3A40', marginBottom: 6 },
   option: { minHeight: 52, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, borderRadius: 14 },
 });
