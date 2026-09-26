@@ -97,7 +97,7 @@ export function DayView({ focus, direction, onShift, onShiftWeek, onPickDay, onT
             {data && (
               <Timeline
                 items={items}
-                wokeAt={data.stats.wokeAt}
+                marks={data.stats.marks}
                 now={now}
                 isToday={focus === today}
                 isPast={focus < today}
@@ -116,10 +116,11 @@ export function DayView({ focus, direction, onShift, onShiftWeek, onPickDay, onT
 type NodeState = 'past' | 'current' | 'future' | 'cancelled' | 'task' | 'taskDone' | 'birthday';
 
 function Timeline({
-  items, wokeAt, now, isToday, isPast, onItemPress, onAdd, animate,
+  items, marks, now, isToday, isPast, onItemPress, onAdd, animate,
 }: {
   items: AgendaItem[];
-  wokeAt: string | null;
+  /** Heures notées dans les suivis (ex. lever), en tête de la journée. */
+  marks: { key: string; name: string; text: string }[];
   now: string;
   isToday: boolean;
   isPast: boolean;
@@ -151,20 +152,20 @@ function Timeline({
 
   return (
     <View style={{ paddingHorizontal: 16 }}>
-      {(items.length > 0 || wokeAt) && <View style={styles.rail} />}
+      {(items.length > 0 || marks.length > 0) && <View style={styles.rail} />}
       <View style={{ gap: 10 }}>
-        {wokeAt && (
-          <Row animate={animate} delay={60} node={<DoneNode />}>
+        {marks.map((m) => (
+          <Row key={m.key} animate={animate} delay={60} node={<DoneNode />}>
             <View style={[styles.card, styles.cardLight]}>
               <AppText variant="bodyStrong" color={colors.textSecondary} style={{ fontSize: 15, flex: 1 }}>
-                Levé
+                {m.name}
               </AppText>
               <AppText variant="number" style={{ fontSize: 14 }}>
-                {wokeAt}
+                {m.text}
               </AppText>
             </View>
           </Row>
-        )}
+        ))}
         {items.map((it, i) => {
           const st = stateOf(it);
           return (

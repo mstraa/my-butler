@@ -47,6 +47,10 @@ export function AnimatedSplash({ onDone }: { onDone: () => void }) {
         if (finished) scheduleOnRN(onDone);
       })),
     );
+    // Filet de sécurité : si l'animation est interrompue (app en arrière-plan, menu de dev…),
+    // le splash ne doit jamais rester affiché.
+    const safety = setTimeout(onDone, 3000);
+    return () => clearTimeout(safety);
   }, [ring, arrow, stem, leaves, out, onDone]);
 
   const ringProps = useAnimatedProps(() => ({ strokeDashoffset: RING_LEN * (1 - ring.get()) }));

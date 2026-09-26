@@ -71,10 +71,9 @@ export function DayCard({ day, isToday, open, stats, onToggle, onLongPress, onIt
 
   const statLines = stats
     ? [
-        stats.wokeAt ? `Levé ${stats.wokeAt}` : null,
         stats.goalsTotal ? `Objectifs ${stats.goalsMet}/${stats.goalsTotal}` : null,
-        stats.eliquidMl !== null ? `E-liquide ${formatMl(stats.eliquidMl)}` : null,
-      ].filter(Boolean)
+        ...stats.trackers.map((t) => `${t.name} ${t.text}`),
+      ].filter(Boolean).slice(0, 3)
     : [`${day.items.length} élément${day.items.length > 1 ? 's' : ''}`];
 
   return (
@@ -164,8 +163,6 @@ function SummaryLine({ label, dot, color }: { label: string; dot: string; color:
     </View>
   );
 }
-
-const formatMl = (ml: number) => `${String(ml).replace('.', ',')} ml`;
 
 const styles = StyleSheet.create({
   closed: {

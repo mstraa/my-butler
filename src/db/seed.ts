@@ -136,8 +136,7 @@ export async function seedDemoData(db: SQLiteDatabase) {
     }
     await db.runAsync('INSERT INTO goal_entries (goal_id, day, value) VALUES (?, ?, 1)', g('sport'), shiftDay(t, -1));
 
-    await db.runAsync('INSERT INTO sleep_log (day, woke_at) VALUES (?, ?)', t, '07:10');
-    await db.runAsync('INSERT INTO eliquid_log (day, ml) VALUES (?, ?)', t, 3);
+    // Pas de suivi par défaut : l'onglet Suivi invite à créer les siens.
     await db.runAsync("INSERT INTO settings (key, value) VALUES ('demo_data', '1')");
   });
 }
@@ -149,6 +148,7 @@ export async function clearAllData(db: SQLiteDatabase) {
       DELETE FROM gift_ideas; DELETE FROM gifts_given; DELETE FROM birthdays;
       DELETE FROM deadline_log; DELETE FROM expenses; DELETE FROM tasks; DELETE FROM events;
       DELETE FROM goal_entries; DELETE FROM goals; DELETE FROM sleep_log; DELETE FROM eliquid_log;
+      DELETE FROM tracker_entries; DELETE FROM trackers;
       DELETE FROM wishes; DELETE FROM budgets; DELETE FROM day_notes;
       DELETE FROM settings WHERE key = 'demo_data' OR key LIKE 'chrono:%';
     `);

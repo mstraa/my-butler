@@ -194,6 +194,30 @@ const MIGRATIONS: string[] = [
   UPDATE goals SET created_at = COALESCE(
     (SELECT MIN(day) FROM goal_entries WHERE goal_id = goals.id), date('now', 'localtime'));
   `,
+  /* v8 — suivis personnalisés (remplacent sommeil et e-liquide codés en dur) */ `
+  CREATE TABLE trackers (
+    id INTEGER PRIMARY KEY NOT NULL,
+    name TEXT NOT NULL,
+    kind TEXT NOT NULL,                -- 'duration' | 'time' | 'quantity' | 'volume'
+    unit TEXT NOT NULL DEFAULT '',     -- h | min ; ml | cl | L ; libre pour une quantité
+    step REAL NOT NULL,                -- pas des boutons − / + (minutes pour durée et heure)
+    goal REAL,                         -- repère facultatif sur le graphique
+    icon TEXT,
+    color TEXT,
+    sort INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL           -- 'YYYY-MM-DD'
+  );
+  CREATE TABLE tracker_entries (
+    tracker_id INTEGER NOT NULL REFERENCES trackers(id) ON DELETE CASCADE,
+    day TEXT NOT NULL,
+    value REAL NOT NULL,               -- minutes (durée), minutes depuis minuit (heure), nombre, volume
+    PRIMARY KEY (tracker_id, day)
+  );
+  `,
+  /* v9 — suivis de type sommeil : coucher et lever, la durée de la nuit en découle */ `
+  ALTER TABLE tracker_entries ADD COLUMN slept_at REAL;  -- coucher de la veille au soir (minutes depuis minuit)
+  ALTER TABLE tracker_entries ADD COLUMN woke_at REAL;   -- lever du jour (minutes depuis minuit)
+  `,
 ];
 
 export async function migrateDbIfNeeded(db: SQLiteDatabase) {
