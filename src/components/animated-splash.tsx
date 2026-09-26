@@ -83,13 +83,14 @@ export function AnimatedSplash({ onDone }: { onDone: () => void }) {
             animatedProps={stemProps}
           />
         </Svg>
-        {/* Flèche et feuilles : calques à part, qui grandissent depuis leur point d'attache. */}
-        <Animated.View style={[StyleSheet.absoluteFill, { transformOrigin: `${px(630)}px ${px(236)}px` }, arrowStyle]}>
+        {/* Flèche et feuilles : calques à part, qui grandissent depuis leur point d'attache. Origine en
+            tableau de nombres : la forme texte « 98.4px » est mal lue par RN (décimales ignorées). */}
+        <Animated.View style={[StyleSheet.absoluteFill, { transformOrigin: [px(630), px(236), 0] }, arrowStyle]}>
           <Svg width={SIZE} height={SIZE} viewBox={`0 0 ${VB} ${VB}`}>
             <Path d={ARROW} fill="#FFFFFF" stroke="#FFFFFF" strokeWidth={24} strokeLinejoin="round" />
           </Svg>
         </Animated.View>
-        <Animated.View style={[StyleSheet.absoluteFill, { transformOrigin: `${px(512)}px ${px(552)}px` }, leavesStyle]}>
+        <Animated.View style={[StyleSheet.absoluteFill, { transformOrigin: [px(512), px(552), 0] }, leavesStyle]}>
           <Svg width={SIZE} height={SIZE} viewBox={`0 0 ${VB} ${VB}`}>
             <Path d={LEAF_L} fill="#FFFFFF" />
             <Path d={LEAF_R} fill="#FFFFFF" />
