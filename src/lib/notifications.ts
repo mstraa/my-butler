@@ -3,6 +3,8 @@ import { router } from 'expo-router';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { Platform } from 'react-native';
 
+import DayNotification from '../../modules/day-notification';
+
 import { getDaySummary, getNotifSettings, planNotifications, type NotifChannel } from '@/db/notification-plan';
 import { dayKey, parseStamp, shiftDay } from '@/lib/dates';
 
@@ -99,24 +101,34 @@ async function syncOnce(db: SQLiteDatabase) {
   /* « Ma journée » : celle d'aujourd'hui tout de suite (après l'heure choisie), la prochaine planifiée. */
   if (!settings.journee) {
     await Notifications.dismissNotificationAsync(JOURNEE_ID);
+    DayNotification?.cancel();
     return;
   }
   const today = dayKey(now);
   const todayAt = parseStamp(`${today}T${settings.journeeTime}`);
-  if (now >= todayAt) {
-    const s = await getDaySummary(db, today, now);
-    if (s.empty) await Notifications.dismissNotificationAsync(JOURNEE_ID);
-    else {
-      await Notifications.scheduleNotificationAsync({
-        identifier: JOURNEE_ID,
-        content: journeeContent(s.title, s.body),
-        trigger: { channelId: JOURNEE_CHANNEL }, // tout de suite, dans le canal « Ma journée »
-      });
-    }
-  }
+  const current = now >= todayAt ? await getDaySummary(db, today, now) : null;
   const nextDay = now >= todayAt ? shiftDay(today, 1) : today;
   const nextAt = parseStamp(`${nextDay}T${settings.journeeTime}`);
   const next = await getDaySummary(db, nextDay, nextAt);
+
+  // Build natif de l'app : mise en page de la maquette (modules/day-notification).
+  if (DayNotification) {
+    await Notifications.dismissNotificationAsync(JOURNEE_ID); // ancienne version texte
+    if (current?.empty) DayNotification.cancel();
+    else if (current) DayNotification.show(JSON.stringify(current.payload));
+    DayNotification.schedule(next.empty ? '' : JSON.stringify(next.payload), nextAt.getTime());
+    return;
+  }
+
+  // Sinon (Expo Go) : notification texte standard.
+  if (current?.empty) await Notifications.dismissNotificationAsync(JOURNEE_ID);
+  else if (current) {
+    await Notifications.scheduleNotificationAsync({
+      identifier: JOURNEE_ID,
+      content: journeeContent(current.title, current.body),
+      trigger: { channelId: JOURNEE_CHANNEL }, // tout de suite, dans le canal « Ma journée »
+    });
+  }
   if (!next.empty) {
     await Notifications.scheduleNotificationAsync({
       identifier: JOURNEE_ID,

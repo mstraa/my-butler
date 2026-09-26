@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Thème clair du volet de notifications : couleurs de la maquette, assombries pour rester lisibles. -->
+<resources>
+  <color name="dn_primary">#1F1F21</color>
+  <color name="dn_secondary">#5B5B61</color>
+  <color name="dn_late">#9A5800</color>
+  <color name="dn_late_bg">#1FFFB547</color>
+  <color name="dn_late_border">#66E09A2B</color>
+  <color name="dn_bday">#B8323A</color>
+  <color name="dn_bday_bg">#1AE0525A</color>
+  <color name="dn_bday_border">#47E0525A</color>
+  <color name="dn_pill_border">#8A8A90</color>
+</resources>

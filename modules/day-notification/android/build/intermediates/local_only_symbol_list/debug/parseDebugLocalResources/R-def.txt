@@ -1,0 +1,37 @@
+R_DEF: Internal format may change without notice
+local
+color dn_bday
+color dn_bday_bg
+color dn_bday_border
+color dn_late
+color dn_late_bg
+color dn_late_border
+color dn_pill_border
+color dn_primary
+color dn_secondary
+drawable dn_bg_bday
+drawable dn_bg_late
+drawable dn_bg_pill
+drawable dn_dot
+drawable dn_ic_cake
+drawable dn_ic_warning
+id dn_bdays
+id dn_dot
+id dn_empty
+id dn_late
+id dn_late_box
+id dn_late_label
+id dn_next
+id dn_pill
+id dn_rdv
+id dn_rdv_label
+id dn_text
+id dn_time
+id dn_title
+id dn_title_accent
+id dn_when
+layout dn_collapsed
+layout dn_expanded
+layout dn_row_bday
+layout dn_row_late
+layout dn_row_rdv
