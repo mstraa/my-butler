@@ -223,6 +223,9 @@ const MIGRATIONS: string[] = [
   ALTER TABLE wishes ADD COLUMN source TEXT;                             -- 'lien' | 'photo' | 'screen' (capture)
   ALTER TABLE wishes ADD COLUMN expense_id INTEGER REFERENCES expenses(id); -- dépense créée à l'achat
   `,
+  /* v11 — suivis remplis depuis Health Connect (pas, sommeil de Zepp…) */ `
+  ALTER TABLE trackers ADD COLUMN source TEXT;  -- 'health' : valeurs importées de Health Connect ; NULL : saisie
+  `,
 ];
 
 export async function migrateDbIfNeeded(db: SQLiteDatabase) {

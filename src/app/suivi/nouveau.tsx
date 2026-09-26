@@ -8,7 +8,7 @@ export default function NewTrackerScreen() {
     <TrackerForm
       title="Nouveau suivi"
       isNew
-      initial={{ name: '', kind: 'quantity', unit: 'fois', step: 1, goal: null, icon: 'task', color: null }}
+      initial={{ name: '', kind: 'quantity', unit: 'fois', step: 1, goal: null, icon: 'task', color: null, source: null }}
       onSave={async (d) => {
         await mutate((db) => createTracker(db, d));
       }}

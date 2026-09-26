@@ -10,6 +10,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AnimatedSplash } from '@/components/animated-splash';
 import { DialogHost } from '@/components/dialog';
+import { HealthSync } from '@/components/health-sync';
 import { NotificationSync } from '@/components/notification-sync';
 import { migrateDbIfNeeded } from '@/db/migrations';
 import { colors } from '@/theme/tokens';
@@ -121,6 +122,7 @@ export default function RootLayout() {
             />
           </Stack>
           <NotificationSync />
+          <HealthSync />
           <DialogHost />
           {!splashDone && <AnimatedSplash onDone={endSplash} />}
         </SQLiteProvider>

@@ -1,5 +1,6 @@
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
+import { useSQLiteContext } from 'expo-sqlite';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
@@ -7,12 +8,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppText } from '@/components/app-text';
 import { showDialog } from '@/components/dialog';
-import { Chip, FieldLabel, TextField } from '@/components/form/fields';
+import { Chip, FieldLabel, SwitchRow, TextField } from '@/components/form/fields';
 import { Icon, type IconName } from '@/components/icon';
 import { TrackerChart } from '@/components/tracker-charts';
 import { GOAL_COLORS } from '@/db/agenda';
-import type { TrackerDraft, TrackerKind } from '@/db/tracking';
+import { syncHealth } from '@/db/health-sync';
+import { healthMetricOf, type TrackerDraft, type TrackerKind } from '@/db/tracking';
 import { shiftDay, todayKey } from '@/lib/dates';
+import { healthAvailable, healthSupported, requestHealthAccess } from '@/lib/health';
 import { fmtDuration, fmtNum, fmtStep, isDuration, parseDraft } from '@/lib/tracker-format';
 import { categoryColors, colors, fonts, withAlpha } from '@/theme/tokens';
 
@@ -53,13 +56,17 @@ const DEFAULTS: Record<TrackerKind, { unit: string; step: number }> = {
   volume: { unit: 'ml', step: 50 },
 };
 
+/** Sommeil et pas : importés de Health Connect par défaut quand le téléphone le permet. */
+const HEALTH = healthSupported ? 'health' : null;
+
 /** Modèles pour démarrer vite (création seulement). */
 const TEMPLATES: (TrackerDraft & { label: string })[] = [
-  { label: 'Sommeil', name: 'Sommeil', kind: 'sleep', unit: 'h', step: 15, goal: 7 * 60, icon: 'moon', color: categoryColors.sport },
-  { label: 'Lever', name: 'Lever', kind: 'time', unit: '', step: 5, goal: null, icon: 'sun', color: categoryColors.groceries },
-  { label: 'Eau', name: 'Eau', kind: 'volume', unit: 'L', step: 0.25, goal: 1.5, icon: 'glass', color: categoryColors.work },
-  { label: 'E-liquide', name: 'E-liquide', kind: 'volume', unit: 'ml', step: 0.5, goal: null, icon: 'drop', color: categoryColors.work },
-  { label: 'Cafés', name: 'Cafés', kind: 'quantity', unit: 'cafés', step: 1, goal: null, icon: 'glass', color: categoryColors.friends },
+  { label: 'Sommeil', name: 'Sommeil', kind: 'sleep', unit: 'h', step: 15, goal: 7 * 60, icon: 'moon', color: categoryColors.sport, source: HEALTH },
+  { label: 'Pas', name: 'Pas', kind: 'quantity', unit: 'pas', step: 1000, goal: 8000, icon: 'steps', color: categoryColors.health, source: HEALTH },
+  { label: 'Lever', name: 'Lever', kind: 'time', unit: '', step: 5, goal: null, icon: 'sun', color: categoryColors.groceries, source: null },
+  { label: 'Eau', name: 'Eau', kind: 'volume', unit: 'L', step: 0.25, goal: 1.5, icon: 'glass', color: categoryColors.work, source: null },
+  { label: 'E-liquide', name: 'E-liquide', kind: 'volume', unit: 'ml', step: 0.5, goal: null, icon: 'drop', color: categoryColors.work, source: null },
+  { label: 'Cafés', name: 'Cafés', kind: 'quantity', unit: 'cafés', step: 1, goal: null, icon: 'glass', color: categoryColors.friends, source: null },
 ];
 
 const ICONS: IconName[] = ['pulse', 'task', 'moon', 'sun', 'drop', 'glass', 'flame', 'timer', 'clock', 'book', 'sport', 'steps', 'pill', 'fruit'];
@@ -84,6 +91,7 @@ type Props = {
 
 /** Formulaire « Nouveau suivi » / « Modifier le suivi ». */
 export function TrackerForm({ title, initial, isNew, onSave, onDelete }: Props) {
+  const db = useSQLiteContext();
   const [d, setD] = useState<TrackerDraft>(initial);
   const [stepText, setStepText] = useState(stepsFor(initial.kind, initial.unit).includes(initial.step) ? '' : fmtNum(initial.step));
   const [goalText, setGoalText] = useState(goalToText(initial));
@@ -128,11 +136,29 @@ export function TrackerForm({ title, initial, isNew, onSave, onDelete }: Props) 
       return;
     }
     const draft = { ...d, name: d.name.trim(), unit: d.unit.trim(), step, goal, color };
+    const metric = healthMetricOf(draft);
+    if (!metric) draft.source = null;
     const kindChanged = !isNew && initial.kind !== d.kind;
-    const doSave = async () => {
+    const doSave = async (withHealth = true) => {
+      if (!withHealth) draft.source = null;
+      if (metric && draft.source === 'health' && !(await requestHealthAccess(metric))) {
+        const available = await healthAvailable();
+        showDialog(
+          available ? 'Accès refusé' : 'Health Connect indisponible',
+          available
+            ? `Sans l'accès ${metric === 'steps' ? 'aux pas' : 'au sommeil'}, le suivi ne peut pas être rempli depuis Health Connect.`
+            : "Health Connect n'est pas installé ou pas à jour sur ce téléphone.",
+          [
+            { text: 'Annuler', style: 'cancel' },
+            { text: 'Saisir à la main', onPress: () => doSave(false) },
+          ],
+        );
+        return;
+      }
       setSaving(true);
       try {
         await onSave(draft);
+        if (draft.source === 'health') syncHealth(db);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         router.back();
       } catch (e) {
@@ -143,7 +169,7 @@ export function TrackerForm({ title, initial, isNew, onSave, onDelete }: Props) 
     if (kindChanged) {
       showDialog('Changer de type ?', 'Les valeurs déjà notées ne correspondent plus : elles seront effacées.', [
         { text: 'Annuler', style: 'cancel' },
-        { text: 'Changer', style: 'destructive', onPress: doSave },
+        { text: 'Changer', style: 'destructive', onPress: () => doSave() },
       ]);
     } else doSave();
   };
@@ -245,6 +271,20 @@ export function TrackerForm({ title, initial, isNew, onSave, onDelete }: Props) 
               {d.kind === 'quantity' && customUnit && (
                 <TextField label="Unité" value={d.unit} onChangeText={(unit) => set({ unit })} placeholder="Ex. clopes, pages, km" autoFocus />
               )}
+            </Animated.View>
+          )}
+
+          {healthSupported && healthMetricOf(d) && (
+            <Animated.View key={`health-${healthMetricOf(d)}`} entering={FadeIn.duration(200)} style={{ gap: 6 }}>
+              <SwitchRow
+                label="Importer depuis Health Connect"
+                icon="pulse"
+                value={d.source === 'health'}
+                onChange={(on) => set({ source: on ? 'health' : null })}
+              />
+              <AppText variant="caption">
+                {`${healthMetricOf(d) === 'steps' ? 'Pas repris' : 'Nuits reprises'} de Zepp ou d'une autre app santé à chaque ouverture de l'app. Tu peux toujours corriger un jour à la main.`}
+              </AppText>
             </Animated.View>
           )}
 

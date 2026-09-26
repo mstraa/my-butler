@@ -17,6 +17,9 @@ import { circularMean } from '@/lib/tracker-format';
 
 export type TrackerKind = 'duration' | 'time' | 'quantity' | 'volume' | 'sleep';
 
+/** 'health' : les valeurs viennent de Health Connect (sommeil, ou quantité en pas). */
+export type TrackerSource = 'health' | null;
+
 export type TrackerDraft = {
   name: string;
   kind: TrackerKind;
@@ -25,7 +28,12 @@ export type TrackerDraft = {
   goal: number | null;
   icon: string;
   color: string | null;
+  source: TrackerSource;
 };
+
+/** Suivis qu'on sait remplir depuis Health Connect. */
+export const healthMetricOf = (t: { kind: TrackerKind; unit: string }) =>
+  t.kind === 'sleep' ? 'sleep' : t.kind === 'quantity' && t.unit === 'pas' ? 'steps' : null;
 
 export type Tracker = TrackerDraft & { id: number; createdAt: DayKey };
 
@@ -64,12 +72,12 @@ const entryValue = (kind: TrackerKind, e: EntryRow | undefined) => {
 
 type Row = {
   id: number; name: string; kind: TrackerKind; unit: string; step: number; goal: number | null;
-  icon: string | null; color: string | null; created_at: DayKey;
+  icon: string | null; color: string | null; source: TrackerSource; created_at: DayKey;
 };
 
 const toTracker = (r: Row): Tracker => ({
   id: r.id, name: r.name, kind: r.kind, unit: r.unit, step: r.step, goal: r.goal,
-  icon: r.icon ?? 'pulse', color: r.color, createdAt: r.created_at,
+  icon: r.icon ?? 'pulse', color: r.color, source: r.source, createdAt: r.created_at,
 });
 
 export async function listTrackers(db: SQLiteDatabase) {
@@ -130,8 +138,8 @@ function stats(t: Tracker, days: TrackerDay[], prev: (number | null)[]) {
 export async function createTracker(db: SQLiteDatabase, d: TrackerDraft) {
   const last = await db.getFirstAsync<{ s: number | null }>('SELECT MAX(sort) AS s FROM trackers');
   const res = await db.runAsync(
-    'INSERT INTO trackers (name, kind, unit, step, goal, icon, color, sort, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    d.name.trim(), d.kind, d.unit, d.step, d.goal, d.icon, d.color, (last?.s ?? 0) + 1, todayKey(),
+    'INSERT INTO trackers (name, kind, unit, step, goal, icon, color, source, sort, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    d.name.trim(), d.kind, d.unit, d.step, d.goal, d.icon, d.color, sourceOf(d), (last?.s ?? 0) + 1, todayKey(),
   );
   return res.lastInsertRowId;
 }
@@ -140,8 +148,8 @@ export async function updateTracker(db: SQLiteDatabase, id: number, d: TrackerDr
   const before = await getTracker(db, id);
   await db.withTransactionAsync(async () => {
     await db.runAsync(
-      'UPDATE trackers SET name = ?, kind = ?, unit = ?, step = ?, goal = ?, icon = ?, color = ? WHERE id = ?',
-      d.name.trim(), d.kind, d.unit, d.step, d.goal, d.icon, d.color, id,
+      'UPDATE trackers SET name = ?, kind = ?, unit = ?, step = ?, goal = ?, icon = ?, color = ?, source = ? WHERE id = ?',
+      d.name.trim(), d.kind, d.unit, d.step, d.goal, d.icon, d.color, sourceOf(d), id,
     );
     // Changer de type rend les anciennes valeurs absurdes (des minutes lues comme des ml…) : on les efface.
     if (before && before.kind !== d.kind) {
@@ -155,6 +163,9 @@ export async function updateTracker(db: SQLiteDatabase, id: number, d: TrackerDr
 }
 
 const ML: Record<string, number> = { ml: 1, cl: 10, L: 1000 };
+
+/** Health Connect seulement si le type s'y prête (un suivi passé en « verres » redevient manuel). */
+const sourceOf = (d: TrackerDraft): TrackerSource => (d.source === 'health' && healthMetricOf(d) ? 'health' : null);
 
 export async function deleteTracker(db: SQLiteDatabase, id: number) {
   await db.withTransactionAsync(async () => {
