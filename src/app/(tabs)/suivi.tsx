@@ -237,6 +237,8 @@ function TrackerCard({
     footer = `moyenne ${fmtNum(t.avg, t.kind === 'volume' ? decimalsOf(t.step) : 1)} ${per}${t.goal ? ` · objectif ${fmtValue(t, t.goal)}` : ''}${trendText}`;
   }
 
+  if (t.source === 'health') footer = ['depuis Health Connect', footer].filter(Boolean).join(' · ');
+
   return (
     <Animated.View
       entering={FadeInDown.delay(Math.min(index, 5) * 40).duration(260)}
