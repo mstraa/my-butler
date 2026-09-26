@@ -9,8 +9,8 @@ import { invalidate } from './use-query';
 /*
  * Remplit les suivis reliés à Health Connect (source = 'health') avec les N derniers jours :
  * pas du jour pour une quantité en « pas », nuit (coucher, lever) pour le sommeil.
- * Seuls les jours où Health Connect a des données sont écrits : une saisie à la main d'un jour
- * sans données est gardée, et remplacée dès que Health Connect en a.
+ * Seuls les jours où Health Connect a des données sont écrits : les valeurs notées avant de relier
+ * le suivi restent pour les autres jours. Un suivi relié ne se modifie plus à la main (voir tracking.ts).
  */
 
 const DAYS = 14;

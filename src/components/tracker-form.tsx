@@ -283,7 +283,7 @@ export function TrackerForm({ title, initial, isNew, onSave, onDelete }: Props) 
                 onChange={(on) => set({ source: on ? 'health' : null })}
               />
               <AppText variant="caption">
-                {`${healthMetricOf(d) === 'steps' ? 'Pas repris' : 'Nuits reprises'} de Zepp ou d'une autre app santé à chaque ouverture de l'app. Tu peux toujours corriger un jour à la main.`}
+                {`${healthMetricOf(d) === 'steps' ? 'Pas repris' : 'Nuits reprises'} de Zepp ou d'une autre app santé à chaque ouverture de l'app. Les valeurs ne se modifient plus à la main.`}
               </AppText>
             </Animated.View>
           )}
