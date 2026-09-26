@@ -9,20 +9,21 @@ import { scheduleOnRN } from 'react-native-worklets';
 
 import { AppText } from '@/components/app-text';
 import { Icon, type IconName } from '@/components/icon';
-import { addEliquid, addToGoal, getDayStats, setWokeAt } from '@/db/agenda';
+import { addToGoal, getDayStats } from '@/db/agenda';
+import { addTrackerValue, getDayTrackers, setSleepTime, setTrackerValue } from '@/db/tracking';
 import { useDbMutation, useDbQuery } from '@/db/use-query';
 import { mediumDayLabel, todayKey } from '@/lib/dates';
+import { fmtClock, fmtStep, fmtValue } from '@/lib/tracker-format';
 import { categoryColors, colors, fonts, withAlpha } from '@/theme/tokens';
 
-type Tile = { label: string; icon: IconName; color: string; href?: '/rdv/nouveau' | '/tache/nouvelle' | '/anniversaires/nouveau' | '/depense/nouvelle' | '/objectif/nouveau' };
+type Tile = { label: string; icon: IconName; color: string; href?: '/rdv/nouveau' | '/tache/nouvelle' | '/anniversaires/nouveau' | '/depense/nouvelle' | '/objectif/nouveau' | '/suivi/nouveau' };
 
 const TILES: Tile[] = [
   { label: 'Rendez-vous', icon: 'calendar', color: categoryColors.work, href: '/rdv/nouveau' },
   { label: 'Tâche', icon: 'task', color: categoryColors.friends, href: '/tache/nouvelle' },
   { label: 'Dépense', icon: 'wallet', color: categoryColors.groceries, href: '/depense/nouvelle' },
   { label: 'Objectif', icon: 'target', color: categoryColors.health, href: '/objectif/nouveau' },
-  { label: 'Lever / coucher', icon: 'moon', color: categoryColors.sport },
-  { label: 'E-liquide', icon: 'drop', color: categoryColors.work },
+  { label: 'Suivi', icon: 'pulse', color: categoryColors.sport, href: '/suivi/nouveau' },
   { label: "Envie d'achat", icon: 'heart', color: categoryColors.family },
   { label: 'Anniversaire', icon: 'cake', color: categoryColors.birthday, href: '/anniversaires/nouveau' },
   { label: 'Note du jour', icon: 'note', color: colors.textSecondary },
@@ -37,6 +38,7 @@ export default function AddSheet() {
   const day = dayParam && /^\d{4}-\d{2}-\d{2}$/.test(dayParam) ? dayParam : today;
   const mutate = useDbMutation();
   const { data: stats } = useDbQuery((db) => getDayStats(db, today), today);
+  const { data: trackers } = useDbQuery((db) => getDayTrackers(db, today), today);
   const [toast, setToast] = useState<{ text: string; n: number } | null>(null);
 
   /* Animation : p va de 0 (fermée) à 1 (ouverte) ; drag = glissement du doigt vers le bas. */
@@ -106,24 +108,32 @@ export default function AddSheet() {
         show(v === null ? "Pas d'objectif « fruits »" : `Fruits ${v}/${fruits?.target ?? '?'}`);
       },
     },
-    {
-      label: '+0,5 ml',
-      value: `E-liquide ${fmtMl(stats?.eliquidMl ?? 0)}`,
+    // Les deux premiers suivis de l'onglet Suivi : + un pas, « maintenant » pour une heure, « Levé » pour le sommeil.
+    ...(trackers ?? []).slice(0, 2).map((t) => ({
+      label: t.kind === 'sleep' ? 'Levé maintenant' : t.kind === 'time' ? `${t.name} maintenant` : `+${fmtStep(t)}`,
+      value:
+        t.kind === 'sleep'
+          ? t.woke !== null ? `Levé ${fmtClock(t.woke)}` : 'Pas encore noté'
+          : t.value !== null ? `${t.name} ${fmtValue(t, t.value)}` : t.name,
       press: async () => {
-        const ml = await mutate((db) => addEliquid(db, today, 0.5));
-        show(`${fmtMl(ml)} aujourd'hui`);
+        if (t.kind === 'sleep') {
+          const d = new Date();
+          const now = d.getHours() * 60 + d.getMinutes();
+          await mutate((db) => setSleepTime(db, t.id, today, 'woke', now));
+          show(`Levé à ${fmtClock(now)}`);
+          return;
+        }
+        if (t.kind === 'time') {
+          const d = new Date();
+          const now = d.getHours() * 60 + d.getMinutes();
+          await mutate((db) => setTrackerValue(db, t.id, today, now));
+          show(`${t.name} ${fmtValue(t, now)}`);
+          return;
+        }
+        const v = await mutate((db) => addTrackerValue(db, t.id, today, t.step));
+        show(`${t.name} ${fmtValue(t, v)}`);
       },
-    },
-    {
-      label: 'Levé maintenant',
-      value: stats?.wokeAt ? `Levé ${stats.wokeAt}` : 'Pas encore noté',
-      press: async () => {
-        const d = new Date();
-        const hhmm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-        await mutate((db) => setWokeAt(db, today, hhmm));
-        show(`Levé à ${hhmm}`);
-      },
-    },
+    })),
   ];
 
   return (
@@ -169,6 +179,10 @@ export default function AddSheet() {
               </Pressable>
             </View>
           ))}
+          {/* Cases vides : la dernière ligne garde des tuiles de même largeur. */}
+          {Array.from({ length: (3 - (TILES.length % 3)) % 3 }, (_, i) => (
+            <View key={`pad-${i}`} style={styles.tileWrap} />
+          ))}
         </View>
 
         <View style={{ gap: 10 }}>
@@ -208,8 +222,6 @@ export default function AddSheet() {
 
 const ease = Easing.bezier(0.2, 0.8, 0.2, 1);
 const easeIn = Easing.bezier(0.4, 0, 1, 1);
-
-const fmtMl = (ml: number) => `${String(ml).replace('.', ',')} ml`;
 
 const styles = StyleSheet.create({
   veil: { flex: 1, backgroundColor: colors.veil },

@@ -3,7 +3,9 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import type { IconName } from '@/components/icon';
 import { deleteTask } from '@/db/tasks';
+import { getDayTrackers, type TrackerKind } from '@/db/tracking';
 import { dayKey, dayOf, type DayKey, nowStamp, parseDay, shiftDay, type Stamp, timeOf } from '@/lib/dates';
+import { fmtClock, fmtValue } from '@/lib/tracker-format';
 import { categoryColors, colors } from '@/theme/tokens';
 
 export type Recurrence = 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly';
@@ -311,17 +313,18 @@ export async function deleteLate(db: SQLiteDatabase, item: LateItem) {
 }
 
 export type DayStats = {
-  wokeAt: string | null;
   goalsMet: number;
   goalsTotal: number;
-  eliquidMl: number | null;
+  /** Suivis saisis ce jour-là, dans l'ordre de l'onglet Suivi. */
+  trackers: { id: number; name: string; kind: TrackerKind; text: string }[];
+  /** Heures notées (suivis « heure », lever du sommeil), en tête de la vue Jour. */
+  marks: { key: string; name: string; text: string }[];
   fruits: { value: number; target: number } | null;
 };
 
 export async function getDayStats(db: SQLiteDatabase, day: DayKey): Promise<DayStats> {
-  const [sleep, liquid, goals] = await Promise.all([
-    db.getFirstAsync<{ woke_at: string | null }>('SELECT woke_at FROM sleep_log WHERE day = ?', day),
-    db.getFirstAsync<{ ml: number }>('SELECT ml FROM eliquid_log WHERE day = ?', day),
+  const [trackers, goals] = await Promise.all([
+    getDayTrackers(db, day),
     db.getAllAsync<{ key: string | null; kind: string; target: number | null; value: number | null }>(
       `SELECT g.key, g.kind, g.target, ge.value
          FROM goals g LEFT JOIN goal_entries ge ON ge.goal_id = g.id AND ge.day = ?
@@ -332,10 +335,18 @@ export async function getDayStats(db: SQLiteDatabase, day: DayKey): Promise<DayS
   const met = goals.filter((g) => isMet(g.kind, g.target, g.value)).length;
   const fruits = goals.find((g) => g.key === 'fruits');
   return {
-    wokeAt: sleep?.woke_at ?? null,
     goalsMet: met,
     goalsTotal: goals.length,
-    eliquidMl: liquid?.ml ?? null,
+    trackers: trackers
+      .filter((t) => t.value !== null)
+      .map((t) => ({ id: t.id, name: t.name, kind: t.kind, text: fmtValue(t, t.value!) })),
+    marks: trackers.flatMap((t) =>
+      t.kind === 'time' && t.value !== null
+        ? [{ key: `t${t.id}`, name: t.name, text: fmtClock(t.value) }]
+        : t.kind === 'sleep' && t.woke !== null
+          ? [{ key: `s${t.id}`, name: 'Levé', text: fmtClock(t.woke) }]
+          : [],
+    ),
     fruits: fruits ? { value: fruits.value ?? 0, target: fruits.target ?? 0 } : null,
   };
 }
@@ -432,22 +443,3 @@ export async function addToGoal(db: SQLiteDatabase, key: string, day: DayKey, de
   );
   return row?.value ?? null;
 }
-
-export async function addEliquid(db: SQLiteDatabase, day: DayKey, ml: number) {
-  await db.runAsync(
-    `INSERT INTO eliquid_log (day, ml) VALUES (?, ?)
-     ON CONFLICT(day) DO UPDATE SET ml = MAX(0, ml + excluded.ml)`,
-    day, ml,
-  );
-  const row = await db.getFirstAsync<{ ml: number }>('SELECT ml FROM eliquid_log WHERE day = ?', day);
-  return row?.ml ?? 0;
-}
-
-export async function setWokeAt(db: SQLiteDatabase, day: DayKey, hhmm: string) {
-  await db.runAsync(
-    `INSERT INTO sleep_log (day, woke_at) VALUES (?, ?)
-     ON CONFLICT(day) DO UPDATE SET woke_at = excluded.woke_at`,
-    day, hhmm,
-  );
-}
-

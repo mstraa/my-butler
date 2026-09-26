@@ -77,6 +77,16 @@ export default function RootLayout() {
               name="depense/budget"
               options={{ presentation: 'transparentModal', animation: 'none', contentStyle: { backgroundColor: 'transparent' } }}
             />
+            <Stack.Screen
+              name="suivi/jour"
+              options={{ presentation: 'transparentModal', animation: 'none', contentStyle: { backgroundColor: 'transparent' } }}
+            />
+            <Stack.Screen
+              name="suivi/heure"
+              options={{ presentation: 'transparentModal', animation: 'none', contentStyle: { backgroundColor: 'transparent' } }}
+            />
+            <Stack.Screen name="suivi/nouveau" options={{ animation: 'slide_from_bottom' }} />
+            <Stack.Screen name="suivi/modifier/[id]" options={{ animation: 'slide_from_bottom' }} />
             <Stack.Screen name="objectif/nouveau" options={{ animation: 'slide_from_bottom' }} />
             <Stack.Screen name="objectif/modifier/[id]" options={{ animation: 'slide_from_bottom' }} />
             <Stack.Screen

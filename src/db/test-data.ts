@@ -2,6 +2,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { clearAllData } from '@/db/seed';
 import { type DayKey, nowStamp, shiftDay, todayKey } from '@/lib/dates';
+import { categoryColors } from '@/theme/tokens';
 
 /*
  * Données de test (Réglages, mode développement) : remplace toutes les données par un jeu fourni
@@ -180,11 +181,33 @@ export async function seedTestData(db: SQLiteDatabase) {
       }
     }
 
-    /* Suivi : lever et e-liquide sur 60 jours. */
+    /* Suivi : un exemple de chaque type, sur 60 jours. */
+    const tracker = async (name: string, kind: string, unit: string, step: number, goal: number | null, icon: string, color: string) =>
+      (await db.runAsync(
+        'INSERT INTO trackers (name, kind, unit, step, goal, icon, color, sort, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        name, kind, unit, step, goal, icon, color, 0, shiftDay(t, -60),
+      )).lastInsertRowId;
+    const sleep = await tracker('Sommeil', 'sleep', 'h', 15, 7 * 60, 'moon', categoryColors.sport);
+    const lunch = await tracker('Déjeuner', 'time', '', 5, null, 'sun', categoryColors.groceries);
+    const reading = await tracker('Lecture', 'duration', 'min', 5, 30, 'book', categoryColors.health);
+    const liquid = await tracker('E-liquide', 'volume', 'ml', 0.5, null, 'drop', categoryColors.work);
+    const coffee = await tracker('Cafés', 'quantity', 'cafés', 1, 3, 'glass', categoryColors.friends);
+    await db.runAsync('UPDATE trackers SET sort = id');
     for (let d = -60; d <= 0; d++) {
       const day = shiftDay(t, d);
-      await db.runAsync('INSERT INTO sleep_log (day, woke_at) VALUES (?, ?)', day, hh(between(6, 8), between(0, 59)));
-      await db.runAsync('INSERT INTO eliquid_log (day, ml) VALUES (?, ?)', day, between(4, 12) / 2);
+      const entry = (id: number, v: number) =>
+        db.runAsync('INSERT INTO tracker_entries (tracker_id, day, value) VALUES (?, ?, ?)', id, day, v);
+      // Coucher la veille entre 22:30 et 00:59, lever entre 06:00 et 08:30.
+      const slept = (between(22 * 60 + 30, 24 * 60 + 59)) % 1440;
+      const woke = between(6 * 60, 8 * 60 + 30);
+      await db.runAsync(
+        'INSERT INTO tracker_entries (tracker_id, day, value, slept_at, woke_at) VALUES (?, ?, ?, ?, ?)',
+        sleep, day, (((woke - slept) % 1440) + 1440) % 1440, slept, woke,
+      );
+      await entry(lunch, between(12 * 60, 13 * 60 + 45));
+      if (r() < 0.7) await entry(reading, between(2, 12) * 5);
+      await entry(liquid, between(4, 12) / 2);
+      if (d < 0 || r() < 0.5) await entry(coffee, between(1, 5));
     }
 
     /* Anniversaires : un par prénom, dates étalées sur l'année ; idées et cadeaux passés. */
