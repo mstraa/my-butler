@@ -177,6 +177,11 @@ const MIGRATIONS: string[] = [
   /* v4 — note des tâches */ `
   ALTER TABLE tasks ADD COLUMN notes TEXT;
   `,
+  /* v5 — anniversaires : suivi des cadeaux */ `
+  ALTER TABLE birthdays ADD COLUMN track_gifts INTEGER NOT NULL DEFAULT 1;  -- idées cadeaux + « acheter avant »
+  ALTER TABLE birthdays ADD COLUMN buy_days INTEGER NOT NULL DEFAULT 3;     -- acheter le cadeau N jours avant
+  ALTER TABLE gift_ideas ADD COLUMN given_id INTEGER REFERENCES gifts_given(id); -- idée marquée « offert »
+  `,
 ];
 
 export async function migrateDbIfNeeded(db: SQLiteDatabase) {

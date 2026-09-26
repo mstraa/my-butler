@@ -154,7 +154,11 @@ export function ListView() {
   return (
     <View style={{ flex: 1 }}>
       <View style={styles.header}>
-        <View style={{ width: 44 }} />
+        <Link href="/anniversaires" asChild>
+          <Pressable accessibilityRole="button" accessibilityLabel="Anniversaires" style={styles.iconBtn}>
+            <Icon name="cake" size={20} color={colors.textFaint} strokeWidth={1.4} />
+          </Pressable>
+        </Link>
         <Pressable
           onPress={goToday}
           disabled={!awayFromToday}

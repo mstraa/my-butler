@@ -56,6 +56,10 @@ export default function RootLayout() {
               name="rdv/apercu/[id]"
               options={{ presentation: 'transparentModal', animation: 'none', contentStyle: { backgroundColor: 'transparent' } }}
             />
+            <Stack.Screen name="anniversaires/index" options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="anniversaires/[id]" options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="anniversaires/nouveau" options={{ animation: 'slide_from_bottom' }} />
+            <Stack.Screen name="anniversaires/modifier/[id]" options={{ animation: 'slide_from_bottom' }} />
             <Stack.Screen name="tache/nouvelle" options={{ animation: 'slide_from_bottom' }} />
             <Stack.Screen name="tache/modifier/[id]" options={{ animation: 'slide_from_bottom' }} />
             <Stack.Screen
