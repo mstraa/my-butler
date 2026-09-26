@@ -1,26 +1,43 @@
 import * as Haptics from 'expo-haptics';
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/app-text';
 import { showDialog } from '@/components/dialog';
+import { Chip, SwitchRow } from '@/components/form/fields';
 import { BackHeader, Screen } from '@/components/screen';
+import { getNotifSettings, type NotifSettings, setNotifSetting } from '@/db/notification-plan';
 import { clearAllData } from '@/db/seed';
 import { seedTestData } from '@/db/test-data';
-import { useDbMutation, useDbQuery } from '@/db/use-query';
+import { invalidate, useDbMutation, useDbQuery } from '@/db/use-query';
+import { notificationsAllowed, setupNotifications, testNotification } from '@/lib/notifications';
 import { colors, fonts } from '@/theme/tokens';
+
+const JOURNEE_TIMES = ['07:00', '07:30', '08:00', '09:00'];
 
 type Category = { id: number; name: string; color: string };
 
 export default function SettingsScreen() {
   const mutate = useDbMutation();
   const { data } = useDbQuery(async (db) => {
-    const [categories, demo] = await Promise.all([
+    const [categories, demo, notif, allowed] = await Promise.all([
       db.getAllAsync<Category>('SELECT id, name, color FROM categories ORDER BY sort'),
       db.getFirstAsync<{ value: string }>("SELECT value FROM settings WHERE key = 'demo_data'"),
+      getNotifSettings(db),
+      notificationsAllowed(),
     ]);
-    return { categories, demo: demo?.value === '1' };
+    return { categories, demo: demo?.value === '1', notif, allowed };
   });
+
+  const setNotif = <K extends keyof NotifSettings>(key: K, value: NotifSettings[K]) => {
+    Haptics.selectionAsync();
+    mutate((db) => setNotifSetting(db, key, value));
+  };
+  const allow = async () => {
+    // Refusée une fois pour de bon : seuls les réglages du téléphone peuvent la rendre.
+    if (!(await setupNotifications())) Linking.openSettings();
+    invalidate(); // relit l'autorisation
+  };
 
   const confirmClear = () =>
     showDialog(
@@ -62,6 +79,40 @@ export default function SettingsScreen() {
     <Screen>
       <BackHeader title="Réglages" />
       <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 4, gap: 20, paddingBottom: 40 }}>
+        {data && (
+          <Section title="Notifications">
+            {!data.allowed && (
+              <View style={{ gap: 10, paddingBottom: 4 }}>
+                <AppText variant="body" color={colors.late} style={{ lineHeight: 20 }}>
+                  Les notifications sont bloquées : aucun rappel ne s&apos;affichera.
+                </AppText>
+                <Pressable onPress={allow} accessibilityRole="button" style={styles.devBtn}>
+                  <AppText style={{ fontFamily: fonts.bodySemiBold, fontSize: 14 }}>Autoriser les notifications</AppText>
+                </Pressable>
+              </View>
+            )}
+            <SwitchRow icon="pin" label="Ma journée (épinglée)" value={data.notif.journee} onChange={(v) => setNotif('journee', v)} />
+            {data.notif.journee && (
+              <View style={{ gap: 8, paddingLeft: 44 }}>
+                <AppText variant="caption">
+                  Rendez-vous du jour, anniversaires et retards, mis à jour en continu. Nouvelle chaque matin à :
+                </AppText>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                  {JOURNEE_TIMES.map((t) => (
+                    <Chip key={t} label={t} selected={data.notif.journeeTime === t} onPress={() => setNotif('journeeTime', t)} />
+                  ))}
+                </View>
+              </View>
+            )}
+            <SwitchRow icon="bell" label="Rappels et échéances" value={data.notif.rappels} onChange={(v) => setNotif('rappels', v)} />
+            <SwitchRow icon="cake" label="Anniversaires" value={data.notif.anniversaires} onChange={(v) => setNotif('anniversaires', v)} />
+            <SwitchRow icon="heart" label="Envies de 30 jours" value={data.notif.envies} onChange={(v) => setNotif('envies', v)} />
+            <AppText variant="caption" style={styles.hint}>
+              Les rappels se règlent aussi sur chaque rendez-vous, tâche et anniversaire.
+            </AppText>
+          </Section>
+        )}
+
         <Section title="Catégories">
           {data?.categories.map((c, i) => (
             <View key={c.id} style={[styles.row, i > 0 && styles.rowBorder]}>
@@ -112,6 +163,14 @@ export default function SettingsScreen() {
               ) : (
                 <AppText style={{ fontFamily: fonts.bodySemiBold, fontSize: 14 }}>Charger des données de test</AppText>
               )}
+            </Pressable>
+            <Pressable
+              onPress={async () => {
+                if (await testNotification()) showDialog('Notification dans 10 s', 'Tu peux quitter l’app pour la voir arriver.');
+              }}
+              accessibilityRole="button"
+              style={({ pressed }) => [styles.devBtn, pressed && { opacity: 0.7 }]}>
+              <AppText style={{ fontFamily: fonts.bodySemiBold, fontSize: 14 }}>Notification de test (10 s)</AppText>
             </Pressable>
           </Section>
         )}
