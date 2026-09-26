@@ -95,10 +95,11 @@ export default function EventSheet() {
 
   /** Hauteur de l'aperçu = haut de la feuille (jusqu'aux infos) + marge basse. */
   const onTopLayout = (e: LayoutChangeEvent) => {
+    // En détail, le haut change (ligne Notes retirée) : on garde la hauteur mesurée en aperçu.
+    if (inDetail.get() || closing.get()) return;
     const h = Math.min(FULL * 0.85, e.nativeEvent.layout.height + BOTTOM);
     const first = previewH.get() === 0;
     previewH.set(h);
-    if (inDetail.get() || closing.get()) return;
     ty.set(withTiming(FULL - h, { duration: first ? 280 : 200, easing: ease }));
   };
 
@@ -183,6 +184,7 @@ export default function EventSheet() {
                     onClose={() => goto('close')}
                     onEdit={() => router.push({ pathname: '/rdv/modifier/[id]', params: { id: String(e.id) } })}
                     onNotes={(notes) => mutate((db) => setEventNotes(db, e.id, notes))}
+                    hideNotes={detail}
                   />
                 )}
               </View>
@@ -275,7 +277,7 @@ function Grabber({ p }: { p: SharedValue<number> }) {
 
 /** Haut de la feuille, commun à l'aperçu et au détail. */
 function PreviewTop({
-  e, day, categories, onClose, onEdit, onNotes,
+  e, day, categories, onClose, onEdit, onNotes, hideNotes,
 }: {
   e: EventRecord;
   day?: string;
@@ -283,6 +285,8 @@ function PreviewTop({
   onClose: () => void;
   onEdit: () => void;
   onNotes: (notes: string) => void;
+  /** Détail : la note est éditée plus bas (Note perso), pas de ligne Notes en double. */
+  hideNotes?: boolean;
 }) {
   const cat = categoryOf(e, categories);
   const { start, end } = occurrenceOf(e, day || undefined);
@@ -300,7 +304,7 @@ function PreviewTop({
         : null,
       color: colors.late,
     },
-    { icon: 'note', label: 'Notes', value: e.notes || null },
+    { icon: 'note', label: 'Notes', value: hideNotes ? null : e.notes || null },
     { icon: 'source', label: 'Source', value: e.source === 'google' ? 'Importé de Google Agenda' : 'Créé dans l’app' },
   ];
   const infos = allInfos.filter((f) => f.value);
