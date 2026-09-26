@@ -4,7 +4,7 @@ import { nowStamp } from '@/lib/dates';
 import type { PhoneEvent } from '@/lib/google-calendar';
 
 /*
- * Import Google Agenda, en lecture seule. Titre, horaires et lieu viennent du téléphone et sont
+ * Import Google Agenda, en lecture seule. Titre, horaires, lieu et lien Meet viennent du téléphone et sont
  * réécrits à chaque synchro ; catégorie, notes, rappel, échéance et annulation restent dans l'app.
  */
 
@@ -83,9 +83,9 @@ export async function applyGoogleSync(
 
     const existing = await db.getAllAsync<{
       id: number; external_id: string; title: string; starts_at: string; ends_at: string | null;
-      all_day: number; location: string | null; calendar_id: string;
+      all_day: number; location: string | null; calendar_id: string; meet_url: string | null;
     }>(
-      `SELECT id, external_id, title, starts_at, ends_at, all_day, location, calendar_id
+      `SELECT id, external_id, title, starts_at, ends_at, all_day, location, calendar_id, meet_url
          FROM events WHERE source = 'google' AND external_id IS NOT NULL`,
     );
     const byExt = new Map(existing.map((r) => [r.external_id, r]));
@@ -97,21 +97,23 @@ export async function applyGoogleSync(
       const prev = byExt.get(e.externalId);
       if (!prev) {
         await db.runAsync(
-          `INSERT INTO events (title, category_id, starts_at, ends_at, all_day, location, recurrence,
+          `INSERT INTO events (title, category_id, starts_at, ends_at, all_day, location, meet_url, recurrence,
                                source, external_id, calendar_id, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, 'none', 'google', ?, ?, ?)`,
-          e.title, calendars[e.calendarId], e.startsAt, e.endsAt, e.allDay ? 1 : 0, e.location,
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'none', 'google', ?, ?, ?)`,
+          e.title, calendars[e.calendarId], e.startsAt, e.endsAt, e.allDay ? 1 : 0, e.location, e.meetUrl,
           e.externalId, e.calendarId, nowStamp(),
         );
         changed++;
       } else if (
         prev.title !== e.title || prev.starts_at !== e.startsAt || prev.ends_at !== e.endsAt ||
-        !!prev.all_day !== e.allDay || prev.location !== e.location || prev.calendar_id !== e.calendarId
+        !!prev.all_day !== e.allDay || prev.location !== e.location || prev.calendar_id !== e.calendarId ||
+        prev.meet_url !== e.meetUrl
       ) {
         await db.runAsync(
-          `UPDATE events SET title = ?, starts_at = ?, ends_at = ?, all_day = ?, location = ?, calendar_id = ?
+          `UPDATE events SET title = ?, starts_at = ?, ends_at = ?, all_day = ?, location = ?, calendar_id = ?,
+                             meet_url = ?
             WHERE id = ?`,
-          e.title, e.startsAt, e.endsAt, e.allDay ? 1 : 0, e.location, e.calendarId, prev.id,
+          e.title, e.startsAt, e.endsAt, e.allDay ? 1 : 0, e.location, e.calendarId, e.meetUrl, prev.id,
         );
         changed++;
       }

@@ -35,6 +35,8 @@ export type PhoneEvent = {
   endsAt: Stamp | null;
   allDay: boolean;
   location: string | null;
+  /** Lien Google Meet trouvé dans la description, le lieu ou l'URL de l'évènement. */
+  meetUrl: string | null;
 };
 
 export async function calendarAllowed() {
@@ -71,6 +73,17 @@ export async function listPhoneCalendars(): Promise<PhoneCalendar[]> {
     );
 }
 
+/** Google range le lien Meet dans la description (« Rejoindre avec Google Meet : https://meet.google.com/abc-defg-hij »). */
+const MEET_RE = /(?:https?:\/\/)?meet\.google\.com\/[a-z0-9-]+(?:\?[^\s<>"')]*)?/i;
+
+export function findMeetUrl(...texts: (string | null | undefined)[]): string | null {
+  for (const t of texts) {
+    const m = t?.match(MEET_RE);
+    if (m) return m[0].startsWith('http') ? m[0] : `https://${m[0]}`;
+  }
+  return null;
+}
+
 const toDate = (v: string | Date) => (v instanceof Date ? v : new Date(v));
 /** Un évènement « journée » est stocké à minuit UTC : on lit sa date en UTC pour ne pas glisser d'un jour. */
 const utcDay = (d: Date) => d.toISOString().slice(0, 10);
@@ -92,6 +105,7 @@ export async function listPhoneEvents(calendarIds: string[], from: Date, to: Dat
       endsAt: e.allDay ? null : end > start ? stamp(end) : null,
       allDay: !!e.allDay,
       location: e.location?.trim() || null,
+      meetUrl: findMeetUrl(e.notes, e.location, e.url),
     });
   }
   return out;

@@ -226,6 +226,9 @@ const MIGRATIONS: string[] = [
   /* v11 — suivis remplis depuis Health Connect (pas, sommeil de Zepp…) */ `
   ALTER TABLE trackers ADD COLUMN source TEXT;  -- 'health' : valeurs importées de Health Connect ; NULL : saisie
   `,
+  /* v12 — rendez-vous Google : lien de visio Google Meet */ `
+  ALTER TABLE events ADD COLUMN meet_url TEXT;  -- lu dans la description de l'évènement Google, à chaque synchro
+  `,
 ];
 
 export async function migrateDbIfNeeded(db: SQLiteDatabase) {

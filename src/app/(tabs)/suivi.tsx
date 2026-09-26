@@ -89,17 +89,6 @@ export default function SuiviScreen() {
               }}
             />
           ))}
-          {!!trackers?.length && (
-            <Pressable
-              onPress={() => router.push('/suivi/nouveau')}
-              accessibilityRole="button"
-              style={({ pressed }) => [styles.newBtn, pressed && { backgroundColor: colors.surface }]}>
-              <Icon name="plus" size={16} color={colors.textSecondary} strokeWidth={2} />
-              <AppText variant="label" color={colors.textSecondary}>
-                Nouveau suivi
-              </AppText>
-            </Pressable>
-          )}
         </ScrollView>
       </KeyboardAvoidingView>
     </Screen>
@@ -441,10 +430,6 @@ const styles = StyleSheet.create({
   big: { fontFamily: fonts.displayThin, fontSize: 48, lineHeight: 52, letterSpacing: -1.4, color: colors.text },
   input: { minWidth: 80, padding: 0, textAlign: 'center', borderBottomWidth: 1, borderBottomColor: colors.text },
   bigRest: { fontFamily: fonts.displayLight, fontSize: 22, letterSpacing: 0, color: colors.textMuted },
-  newBtn: {
-    height: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    borderRadius: 20, borderWidth: 1, borderStyle: 'dashed', borderColor: colors.borderDashed,
-  },
   primary: {
     height: 44, marginTop: 6, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', gap: 8,
     borderRadius: 999, backgroundColor: colors.text,
