@@ -1,4 +1,5 @@
 import * as Haptics from 'expo-haptics';
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
@@ -6,6 +7,7 @@ import { AppText } from '@/components/app-text';
 import { showDialog } from '@/components/dialog';
 import { Chip, SwitchRow } from '@/components/form/fields';
 import { GoogleCalendarSettings } from '@/components/google-calendar-settings';
+import { Icon } from '@/components/icon';
 import { BackHeader, Screen } from '@/components/screen';
 import { getNotifSettings, type NotifSettings, setNotifSetting } from '@/db/notification-plan';
 import { clearAllData } from '@/db/seed';
@@ -116,13 +118,28 @@ export default function SettingsScreen() {
 
         <Section title="Catégories">
           {data?.categories.map((c, i) => (
-            <View key={c.id} style={[styles.row, i > 0 && styles.rowBorder]}>
+            <Pressable
+              key={c.id}
+              onPress={() => router.push(`/categorie/${c.id}`)}
+              accessibilityRole="button"
+              accessibilityHint="Modifier la catégorie"
+              style={({ pressed }) => [styles.row, i > 0 && styles.rowBorder, pressed && { opacity: 0.6 }]}>
               <View style={[styles.swatch, { backgroundColor: c.color }]} />
               <AppText variant="bodyMedium" style={{ flex: 1 }}>
                 {c.name}
               </AppText>
-            </View>
+              <Icon name="edit" size={16} color={colors.textTertiary} />
+            </Pressable>
           ))}
+          <Pressable
+            onPress={() => router.push('/categorie/nouvelle')}
+            accessibilityRole="button"
+            style={({ pressed }) => [styles.row, styles.rowBorder, pressed && { opacity: 0.6 }]}>
+            <Icon name="plus" size={16} color={colors.textSecondary} />
+            <AppText variant="bodyMedium" color={colors.textSecondary} style={{ flex: 1 }}>
+              Nouvelle catégorie
+            </AppText>
+          </Pressable>
           <AppText variant="caption" style={styles.hint}>
             Chaque agenda Google importé peut recevoir une catégorie, juste en dessous.
           </AppText>
