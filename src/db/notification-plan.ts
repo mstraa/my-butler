@@ -5,6 +5,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { getAgendaDays, getLateItems, occurrencesInRange, type Recurrence } from '@/db/agenda';
 import { ageAt, nextOccurrence } from '@/db/birthdays';
 import { OLD_DAYS } from '@/db/wishes';
+import type { DayPayload } from '../../modules/day-notification';
 import { dayKey, dayOf, type DayKey, parseDay, parseStamp, shiftDay, type Stamp, stamp, timeOf } from '@/lib/dates';
 
 /*
@@ -235,11 +236,13 @@ export async function planNotifications(db: SQLiteDatabase, s: NotifSettings, no
 
 export type DaySummary = {
   day: DayKey;
-  /** Repliée : « 3 rdv aujourd'hui · 3 en retard ». */
+  /** Repliée : « 3 rdv aujourd'hui · 3 en retard » (texte seul, pour la notification standard). */
   title: string;
   /** Première ligne (visible repliée), puis le détail (visible dépliée). */
   body: string;
   empty: boolean;
+  /** Même contenu, structuré pour la mise en page native (modules/day-notification). */
+  payload: DayPayload;
 };
 
 /**
@@ -250,30 +253,49 @@ export async function getDaySummary(db: SQLiteDatabase, day: DayKey, ref: Date):
   const [days, late] = await Promise.all([getAgendaDays(db, day, shiftDay(day, 1)), getLateItems(db, stamp(ref))]);
   const items = days[0]?.items ?? [];
   const rdv = items.filter((i) => i.kind === 'event' && !i.cancelled);
+  const bdayText = (title: string) => title.replace('Anniv. ', 'anniversaire de ').replace(/ · (\d+) ans$/, ' ($1 ans)');
   const birthdays = [
-    ...items.filter((i) => i.kind === 'birthday').map((i) => `Aujourd'hui : ${i.title.replace('Anniv.', 'anniversaire de')}`),
-    ...(days[1]?.items ?? []).filter((i) => i.kind === 'birthday').map((i) => `Demain : ${i.title.replace('Anniv.', 'anniversaire de')}`),
-  ].map((l) => l.replace(/ · (\d+) ans$/, ' ($1 ans)'));
+    ...items.filter((i) => i.kind === 'birthday').map((i) => ({ lead: "Aujourd'hui", text: bdayText(i.title) })),
+    ...(days[1]?.items ?? []).filter((i) => i.kind === 'birthday').map((i) => ({ lead: 'Demain', text: bdayText(i.title) })),
+  ];
 
   const refTime = dayKey(ref) === day ? format(ref, 'HH:mm') : '00:00';
   const next = rdv.find((r) => !r.allDay && r.time >= refTime);
-  const parts = [rdv.length ? `${rdv.length} rdv aujourd'hui` : null, late.length ? `${late.length} en retard` : null].filter(Boolean);
+  const rdvPart = rdv.length ? `${rdv.length} rdv aujourd'hui` : '';
+  const latePart = late.length ? `${late.length} en retard` : '';
+  const title = [rdvPart, latePart].filter(Boolean).join(' · ') || (birthdays.length ? 'Ma journée' : "Rien de prévu aujourd'hui");
+  const nextLine = next ? `Prochain : ${next.time} ${next.title}` : birthdays.length ? `${birthdays[0].lead} : ${birthdays[0].text}` : '';
 
   const lines: string[] = [];
-  if (next) lines.push(`Prochain : ${next.time} ${next.title}`);
-  else if (birthdays.length) lines.push(birthdays[0]);
-  lines.push(...birthdays.filter((b) => b !== lines[0]));
+  if (nextLine) lines.push(nextLine);
+  lines.push(...birthdays.map((b) => `${b.lead} : ${b.text}`).filter((l) => l !== nextLine));
   if (rdv.length) lines.push('', ...rdv.map((r) => `${r.allDay ? 'Journée' : r.time}  ${r.title}`));
   if (late.length) {
     lines.push('', `En retard · ${late.length}`);
     lines.push(...late.slice(0, 4).map((l) => `${l.type === 'event' ? 'RDV · ' : ''}${l.title} — ${dueLabel(l.due, ref)}`));
     if (late.length > 4) lines.push(`+${late.length - 4} autre${late.length > 5 ? 's' : ''}`);
   }
-  const empty = !rdv.length && !late.length && !birthdays.length;
+
   return {
     day,
-    title: parts.length ? parts.join(' · ') : birthdays.length ? 'Ma journée' : "Rien de prévu aujourd'hui",
+    title,
     body: lines.join('\n').trim(),
-    empty,
+    empty: !rdv.length && !late.length && !birthdays.length,
+    payload: {
+      day,
+      title: rdvPart || (latePart ? '' : title),
+      titleAccent: latePart || undefined,
+      next: nextLine,
+      birthdays,
+      rdvLabel: `Rendez-vous du jour · ${rdv.length}`,
+      rdv: rdv.map((r) => ({
+        time: r.allDay ? 'Journée' : r.time,
+        title: r.title,
+        color: r.color,
+        highlight: r === next,
+      })),
+      lateLabel: `En retard · sans action · ${late.length}`,
+      late: late.map((l) => ({ title: l.title, when: dueLabel(l.due, ref), rdv: l.type === 'event' })),
+    },
   };
 }

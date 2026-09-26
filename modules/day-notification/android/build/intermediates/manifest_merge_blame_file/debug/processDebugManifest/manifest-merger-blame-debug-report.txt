@@ -1,0 +1,33 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="expo.modules.daynotification" >
+4
+5    <uses-sdk android:minSdkVersion="24" />
+6
+7    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+7-->/Volumes/Mimic/Code/my-butler/.claude/worktrees/whats-next-7c7c81/modules/day-notification/android/src/main/AndroidManifest.xml:2:3-79
+7-->/Volumes/Mimic/Code/my-butler/.claude/worktrees/whats-next-7c7c81/modules/day-notification/android/src/main/AndroidManifest.xml:2:20-76
+8
+9    <application>
+9-->/Volumes/Mimic/Code/my-butler/.claude/worktrees/whats-next-7c7c81/modules/day-notification/android/src/main/AndroidManifest.xml:3:3-11:17
+10
+11        <!-- Réveil du matin (« Ma journée » du jour) et redémarrage du téléphone. -->
+12        <receiver
+12-->/Volumes/Mimic/Code/my-butler/.claude/worktrees/whats-next-7c7c81/modules/day-notification/android/src/main/AndroidManifest.xml:5:5-10:16
+13            android:name="expo.modules.daynotification.DayAlarmReceiver"
+13-->/Volumes/Mimic/Code/my-butler/.claude/worktrees/whats-next-7c7c81/modules/day-notification/android/src/main/AndroidManifest.xml:5:15-75
+14            android:exported="false" >
+14-->/Volumes/Mimic/Code/my-butler/.claude/worktrees/whats-next-7c7c81/modules/day-notification/android/src/main/AndroidManifest.xml:5:76-100
+15            <intent-filter>
+15-->/Volumes/Mimic/Code/my-butler/.claude/worktrees/whats-next-7c7c81/modules/day-notification/android/src/main/AndroidManifest.xml:6:7-9:23
+16                <action android:name="android.intent.action.BOOT_COMPLETED" />
+16-->/Volumes/Mimic/Code/my-butler/.claude/worktrees/whats-next-7c7c81/modules/day-notification/android/src/main/AndroidManifest.xml:7:9-71
+16-->/Volumes/Mimic/Code/my-butler/.claude/worktrees/whats-next-7c7c81/modules/day-notification/android/src/main/AndroidManifest.xml:7:17-68
+17                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+17-->/Volumes/Mimic/Code/my-butler/.claude/worktrees/whats-next-7c7c81/modules/day-notification/android/src/main/AndroidManifest.xml:8:9-76
+17-->/Volumes/Mimic/Code/my-butler/.claude/worktrees/whats-next-7c7c81/modules/day-notification/android/src/main/AndroidManifest.xml:8:17-73
+18            </intent-filter>
+19        </receiver>
+20    </application>
+21
+22</manifest>

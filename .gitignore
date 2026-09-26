@@ -41,3 +41,7 @@ example
 # generated native folders
 /ios
 /android
+
+# APK / AAB produits par « eas build --local »
+*.apk
+*.aab
