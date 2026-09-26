@@ -210,6 +210,24 @@ export async function seedTestData(db: SQLiteDatabase) {
       if (d < 0 || r() < 0.5) await entry(coffee, between(1, 5));
     }
 
+    /* Envies d'achat : en attente (dont plusieurs de plus de 30 jours), achetées, abandonnées. */
+    const WISHES: [string, number][] = [
+      ['Casque audio', 329], ['Veste de pluie', 149], ['Lampe de bureau', 89], ['Clavier mécanique', 179],
+      ['Sac à dos', 120], ['Montre sport', 374], ['Liseuse', 139], ['Plaid', 45], ['Enceinte portable', 99],
+      ['Chaussures de trail', 135], ['Machine à café', 249], ['Objectif photo', 520], ['Tapis de yoga', 35],
+      ['Jeu de société', 42], ['Tente 2 places', 189],
+    ];
+    for (const [i, [title, euros]] of WISHES.entries()) {
+      const state = i < 8 ? 'waiting' : i < 12 ? 'bought' : 'abandoned';
+      const age = between(1, 90);
+      await db.runAsync(
+        'INSERT INTO wishes (title, url, price_cents, level, source, state, state_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        title, r() < 0.5 ? 'https://www.example.com/' : null, r() < 0.9 ? euros * 100 : null, pick(['bof', 'envie', 'besoin']),
+        pick(['lien', 'photo', 'screen', null]), state,
+        state === 'waiting' ? null : `${shiftDay(t, -between(0, Math.max(0, age - 1)))}T18:00`, `${shiftDay(t, -age)}T12:00`,
+      );
+    }
+
     /* Anniversaires : un par prénom, dates étalées sur l'année ; idées et cadeaux passés. */
     const year = Number(t.slice(0, 4));
     for (const [i, name] of NAMES.entries()) {

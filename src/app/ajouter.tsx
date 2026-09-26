@@ -16,7 +16,7 @@ import { mediumDayLabel, todayKey } from '@/lib/dates';
 import { fmtClock, fmtStep, fmtValue } from '@/lib/tracker-format';
 import { categoryColors, colors, fonts, withAlpha } from '@/theme/tokens';
 
-type Tile = { label: string; icon: IconName; color: string; href?: '/rdv/nouveau' | '/tache/nouvelle' | '/anniversaires/nouveau' | '/depense/nouvelle' | '/objectif/nouveau' | '/suivi/nouveau' };
+type Tile = { label: string; icon: IconName; color: string; href?: '/rdv/nouveau' | '/tache/nouvelle' | '/anniversaires/nouveau' | '/depense/nouvelle' | '/objectif/nouveau' | '/suivi/nouveau' | '/envie/nouvelle' };
 
 const TILES: Tile[] = [
   { label: 'Rendez-vous', icon: 'calendar', color: categoryColors.work, href: '/rdv/nouveau' },
@@ -24,7 +24,7 @@ const TILES: Tile[] = [
   { label: 'Dépense', icon: 'wallet', color: categoryColors.groceries, href: '/depense/nouvelle' },
   { label: 'Objectif', icon: 'target', color: categoryColors.health, href: '/objectif/nouveau' },
   { label: 'Suivi', icon: 'pulse', color: categoryColors.sport, href: '/suivi/nouveau' },
-  { label: "Envie d'achat", icon: 'heart', color: categoryColors.family },
+  { label: "Envie d'achat", icon: 'heart', color: categoryColors.family, href: '/envie/nouvelle' },
   { label: 'Anniversaire', icon: 'cake', color: categoryColors.birthday, href: '/anniversaires/nouveau' },
   { label: 'Note du jour', icon: 'note', color: colors.textSecondary },
 ];
