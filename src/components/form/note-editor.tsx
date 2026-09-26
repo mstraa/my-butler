@@ -11,10 +11,12 @@ import { colors, fonts } from '@/theme/tokens';
  * « Aperçu » montre le rendu ; les cases à cocher s'y cochent.
  */
 export function NoteEditor({
-  value, onChange, placeholder, label = 'Note',
+  value, onChange, onCommit, placeholder, label = 'Note',
 }: {
   value: string;
   onChange: (v: string) => void;
+  /** Texte à enregistrer : en quittant le champ, ou quand on coche une case dans l'aperçu. */
+  onCommit?: (v: string) => void;
   placeholder?: string;
   label?: string;
 }) {
@@ -46,7 +48,13 @@ export function NoteEditor({
       {preview ? (
         <View style={styles.preview}>
           {value.trim() ? (
-            <Markdown source={value} onToggle={onChange} />
+            <Markdown
+              source={value}
+              onToggle={(next) => {
+                onChange(next);
+                onCommit?.(next);
+              }}
+            />
           ) : (
             <AppText variant="body" color={colors.textTertiary}>
               Rien à afficher.
@@ -64,7 +72,10 @@ export function NoteEditor({
           selectionColor={colors.textSecondary}
           multiline
           onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
+          onBlur={() => {
+            setFocused(false);
+            onCommit?.(value);
+          }}
           style={[styles.input, focused && { borderColor: colors.text }]}
         />
       )}
