@@ -57,6 +57,13 @@ export async function setCalendarCategory(db: SQLiteDatabase, calendarId: string
   });
 }
 
+/** Catégorie supprimée : les agendas qui l'utilisaient passent sans catégorie (à appeler dans une transaction). */
+export async function forgetCalendarCategory(db: SQLiteDatabase, categoryId: number) {
+  const { calendars } = await getGoogleSettings(db);
+  for (const id of Object.keys(calendars)) if (calendars[id] === categoryId) calendars[id] = null;
+  await putSetting(db, KEY_CALENDARS, JSON.stringify(calendars));
+}
+
 async function removeImported(db: SQLiteDatabase, where: string, args: (string | number)[]) {
   const cond = `source = 'google' AND ${where}`;
   await db.runAsync(
