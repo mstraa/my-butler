@@ -15,6 +15,11 @@ const subscribe = (l: () => void) => {
 };
 const getVersion = () => version;
 
+/** Numéro qui change à chaque écriture en base (pour réagir aux changements hors d'une requête). */
+export function useDbVersion() {
+  return useSyncExternalStore(subscribe, getVersion);
+}
+
 /**
  * Dernier résultat connu par requête nommée. Quand un écran revient (changement de vue,
  * de période déjà vue…), il s'affiche tout de suite avec ces données au lieu d'un écran vide,
