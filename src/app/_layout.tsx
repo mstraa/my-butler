@@ -87,6 +87,13 @@ export default function RootLayout() {
             />
             <Stack.Screen name="suivi/nouveau" options={{ animation: 'slide_from_bottom' }} />
             <Stack.Screen name="suivi/modifier/[id]" options={{ animation: 'slide_from_bottom' }} />
+            <Stack.Screen name="envie/nouvelle" options={{ animation: 'slide_from_bottom' }} />
+            <Stack.Screen name="envie/partage" options={{ animation: 'fade' }} />
+            <Stack.Screen name="envie/modifier/[id]" options={{ animation: 'slide_from_bottom' }} />
+            <Stack.Screen
+              name="envie/[id]"
+              options={{ presentation: 'transparentModal', animation: 'none', contentStyle: { backgroundColor: 'transparent' } }}
+            />
             <Stack.Screen name="objectif/nouveau" options={{ animation: 'slide_from_bottom' }} />
             <Stack.Screen name="objectif/modifier/[id]" options={{ animation: 'slide_from_bottom' }} />
             <Stack.Screen

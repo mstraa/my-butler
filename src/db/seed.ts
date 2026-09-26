@@ -137,6 +137,19 @@ export async function seedDemoData(db: SQLiteDatabase) {
     await db.runAsync('INSERT INTO goal_entries (goal_id, day, value) VALUES (?, ?, 1)', g('sport'), shiftDay(t, -1));
 
     // Pas de suivi par défaut : l'onglet Suivi invite à créer les siens.
+
+    // Quelques envies d'achat, dont une qui attend depuis plus de 30 jours.
+    for (const [title, cents, days, level, url] of [
+      ['Casque audio', 32900, 44, 'besoin', 'https://www.fnac.com/'],
+      ['Veste de pluie', 14900, 23, 'envie', null],
+      ['Lampe de bureau', 8900, 15, 'bof', null],
+      ['Clavier mécanique', 17900, 5, 'envie', 'https://www.ldlc.com/'],
+    ] as const) {
+      await db.runAsync(
+        "INSERT INTO wishes (title, url, price_cents, level, source, state, created_at) VALUES (?, ?, ?, ?, ?, 'waiting', ?)",
+        title, url, cents, level, url ? 'lien' : null, at(-days, '20:00'),
+      );
+    }
     await db.runAsync("INSERT INTO settings (key, value) VALUES ('demo_data', '1')");
   });
 }

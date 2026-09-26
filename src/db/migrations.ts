@@ -218,6 +218,11 @@ const MIGRATIONS: string[] = [
   ALTER TABLE tracker_entries ADD COLUMN slept_at REAL;  -- coucher de la veille au soir (minutes depuis minuit)
   ALTER TABLE tracker_entries ADD COLUMN woke_at REAL;   -- lever du jour (minutes depuis minuit)
   `,
+  /* v10 — envies d'achat : niveau, origine de l'image, dépense liée */ `
+  ALTER TABLE wishes ADD COLUMN level TEXT NOT NULL DEFAULT 'envie';     -- 'bof' | 'envie' | 'besoin'
+  ALTER TABLE wishes ADD COLUMN source TEXT;                             -- 'lien' | 'photo' | 'screen' (capture)
+  ALTER TABLE wishes ADD COLUMN expense_id INTEGER REFERENCES expenses(id); -- dépense créée à l'achat
+  `,
 ];
 
 export async function migrateDbIfNeeded(db: SQLiteDatabase) {
