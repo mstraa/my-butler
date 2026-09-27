@@ -3,9 +3,9 @@ import { router } from 'expo-router';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { Platform } from 'react-native';
 
-import DayNotification from '../../modules/day-notification';
+import DayNotification, { type DayUpdate } from '../../modules/day-notification';
 
-import { getDaySummary, getNotifSettings, planNotifications, type NotifChannel } from '@/db/notification-plan';
+import { getDayUpdates, getNotifSettings, planNotifications, type NotifChannel } from '@/db/notification-plan';
 import { dayKey, parseStamp, shiftDay } from '@/lib/dates';
 
 /*
@@ -98,7 +98,10 @@ async function syncOnce(db: SQLiteDatabase) {
     });
   }
 
-  /* « Ma journée » : celle d'aujourd'hui tout de suite (après l'heure choisie), la prochaine planifiée. */
+  /*
+   * « Ma journée » : celle d'aujourd'hui tout de suite (après l'heure choisie), puis ses mises à jour
+   * (rdv terminé, échéance passée…) et celles du prochain matin, planifiées d'avance.
+   */
   if (!settings.journee) {
     await Notifications.dismissNotificationAsync(JOURNEE_ID);
     DayNotification?.cancel();
@@ -106,36 +109,32 @@ async function syncOnce(db: SQLiteDatabase) {
   }
   const today = dayKey(now);
   const todayAt = parseStamp(`${today}T${settings.journeeTime}`);
-  const current = now >= todayAt ? await getDaySummary(db, today, now) : null;
+  const current = now >= todayAt ? await getDayUpdates(db, today, now) : [];
   const nextDay = now >= todayAt ? shiftDay(today, 1) : today;
   const nextAt = parseStamp(`${nextDay}T${settings.journeeTime}`);
-  const next = await getDaySummary(db, nextDay, nextAt);
+  const next = await getDayUpdates(db, nextDay, nextAt);
 
   // Build natif de l'app : mise en page de la maquette (modules/day-notification).
   if (DayNotification) {
     await Notifications.dismissNotificationAsync(JOURNEE_ID); // ancienne version texte
-    if (current?.empty) DayNotification.cancel();
-    else if (current) DayNotification.show(JSON.stringify(current.payload));
-    DayNotification.schedule(next.empty ? '' : JSON.stringify(next.payload), nextAt.getTime());
+    const updates: DayUpdate[] = [...current, ...next].map((u) => ({ at: u.at.getTime(), payload: u.summary.payload }));
+    DayNotification.plan(JSON.stringify(updates));
     return;
   }
 
-  // Sinon (Expo Go) : notification texte standard.
-  if (current?.empty) await Notifications.dismissNotificationAsync(JOURNEE_ID);
-  else if (current) {
+  // Sinon (Expo Go) : notification texte standard, sans les mises à jour de la journée.
+  if (current.length) {
     await Notifications.scheduleNotificationAsync({
       identifier: JOURNEE_ID,
-      content: journeeContent(current.title, current.body),
+      content: journeeContent(current[0].summary.title, current[0].summary.body),
       trigger: { channelId: JOURNEE_CHANNEL }, // tout de suite, dans le canal « Ma journée »
     });
   }
-  if (!next.empty) {
-    await Notifications.scheduleNotificationAsync({
-      identifier: JOURNEE_ID,
-      content: journeeContent(next.title, next.body),
-      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: nextAt, channelId: JOURNEE_CHANNEL },
-    });
-  }
+  await Notifications.scheduleNotificationAsync({
+    identifier: JOURNEE_ID,
+    content: journeeContent(next[0].summary.title, next[0].summary.body),
+    trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: nextAt, channelId: JOURNEE_CHANNEL },
+  });
 }
 
 function journeeContent(title: string, body: string): Notifications.NotificationContentInput {

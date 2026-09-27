@@ -11,4 +11,9 @@ export type DayPayload = {
   rdv: { time: string; title: string; color: string; highlight: boolean }[];
   lateLabel: string;
   late: { title: string; when: string; rdv: boolean }[];
+  /** Texte du détail quand il n'y a rien d'autre : « Journée libre, profites-en ! ». */
+  empty: string;
 };
+
+/** Une version de « Ma journée » et l'instant où elle doit remplacer la précédente. */
+export type DayUpdate = { at: number; payload: DayPayload };

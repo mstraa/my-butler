@@ -15,6 +15,7 @@ import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.style.StyleSpan
 import android.widget.RemoteViews
+import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -23,10 +24,13 @@ import java.util.Locale
 /**
  * Construit et publie « Ma journée ». Contenu (JSON venu du JS) :
  * { day, title, titleAccent?, next, birthdays: [{ lead, text }], rdvLabel, rdv: [{ time, title, color, highlight }],
- *   more, lateLabel, late: [{ title, when, rdv }] }
+ *   lateLabel, late: [{ title, when, rdv }], empty }
+ *
+ * Le JS prépare d'avance les versions successives (début et fin des rdv, échéances, prochain matin) :
+ * elles attendent dans une file, et une seule alarme publie la prochaine à son heure.
  */
 object DayNotifier {
-  const val ACTION_MORNING = "expo.modules.daynotification.MORNING"
+  const val ACTION_UPDATE = "expo.modules.daynotification.UPDATE"
   private const val CHANNEL = "journee"
   private const val TAG = "ma-journee"
   private const val ID = 7301
@@ -43,42 +47,47 @@ object DayNotifier {
     manager.notify(TAG, ID, build(context, payload))
   }
 
-  /** `json` vide : rien à montrer ce matin-là, l'alarme est retirée. */
-  fun schedule(context: Context, json: String, atMs: Long) {
-    if (json.isEmpty()) {
-      prefs(context).edit().remove("next").remove("nextAt").apply()
-      context.getSystemService(AlarmManager::class.java)?.cancel(morningIntent(context))
-      return
-    }
-    prefs(context).edit().putString("next", json).putLong("nextAt", atMs).apply()
-    setAlarm(context, atMs)
+  /** Remplace la file : `[{ at, payload }]`. Celles déjà dues sont publiées tout de suite (la dernière). */
+  fun plan(context: Context, json: String) {
+    prefs(context).edit().putString("queue", json).apply()
+    advance(context)
   }
 
   fun cancel(context: Context) {
     prefs(context).edit().clear().apply()
-    context.getSystemService(AlarmManager::class.java)?.cancel(morningIntent(context))
+    context.getSystemService(AlarmManager::class.java)?.cancel(updateIntent(context))
     context.getSystemService(NotificationManager::class.java)?.cancel(TAG, ID)
   }
 
-  /** L'alarme du matin : publie le contenu préparé la veille. */
-  fun fireScheduled(context: Context) {
-    val next = prefs(context).getString("next", null) ?: return
-    prefs(context).edit().remove("next").remove("nextAt").apply()
-    post(context, next)
+  /**
+   * Publie la plus récente des versions dues, garde les suivantes et programme l'alarme de la prochaine.
+   * Sert à l'alarme, à la planification et au redémarrage (alarmes perdues, heures passées pendant l'arrêt).
+   */
+  fun advance(context: Context) {
+    val queue = JSONArray(prefs(context).getString("queue", null) ?: "[]")
+    val now = System.currentTimeMillis()
+    var due: JSONObject? = null
+    val rest = JSONArray()
+    for (i in 0 until queue.length()) {
+      val u = queue.getJSONObject(i)
+      if (u.getLong("at") <= now) due = u else rest.put(u)
+    }
+    prefs(context).edit().putString("queue", rest.toString()).apply()
+    if (due != null) post(context, due.getJSONObject("payload").toString())
+
+    val alarms = context.getSystemService(AlarmManager::class.java) ?: return
+    alarms.cancel(updateIntent(context))
+    var nextAt = Long.MAX_VALUE
+    for (i in 0 until rest.length()) nextAt = minOf(nextAt, rest.getJSONObject(i).getLong("at"))
+    if (nextAt != Long.MAX_VALUE) setAlarm(context, nextAt)
   }
 
   /** Redémarrage : les alarmes et la notification ont disparu ; on les remet. */
   fun restore(context: Context) {
-    val p = prefs(context)
-    val next = p.getString("next", null)
-    if (next != null) {
-      val nextAt = p.getLong("nextAt", 0)
-      if (nextAt <= System.currentTimeMillis()) return fireScheduled(context) // matin passé pendant l'arrêt
-      setAlarm(context, nextAt)
-    }
-    val current = p.getString("current", null) ?: return
+    val current = prefs(context).getString("current", null)
     val today = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(Date())
-    if (JSONObject(current).optString("day") == today) post(context, current)
+    if (current != null && JSONObject(current).optString("day") == today) post(context, current)
+    advance(context) // publie par-dessus une version devenue due pendant l'arrêt
   }
 
   private fun build(context: Context, p: JSONObject): Notification {
@@ -144,6 +153,7 @@ object DayNotifier {
     }
     expanded.setTextViewText(R.id.dn_late_label, p.optString("lateLabel"))
     expanded.setViewVisibility(R.id.dn_late_box, visible(lateCount > 0))
+    expanded.setTextViewText(R.id.dn_empty, p.optString("empty").ifEmpty { "Rien de prévu aujourd'hui" })
     expanded.setViewVisibility(R.id.dn_empty, visible(rdvCount == 0 && lateCount == 0 && (bdays?.length() ?: 0) == 0))
 
     return Notification.Builder(context, CHANNEL)
@@ -187,14 +197,14 @@ object DayNotifier {
     return PendingIntent.getActivity(context, ID, launch, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
   }
 
-  private fun morningIntent(context: Context): PendingIntent {
-    val intent = Intent(context, DayAlarmReceiver::class.java).setAction(ACTION_MORNING)
+  private fun updateIntent(context: Context): PendingIntent {
+    val intent = Intent(context, DayAlarmReceiver::class.java).setAction(ACTION_UPDATE)
     return PendingIntent.getBroadcast(context, ID, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
   }
 
   private fun setAlarm(context: Context, atMs: Long) {
     val alarms = context.getSystemService(AlarmManager::class.java) ?: return
-    val pi = morningIntent(context)
+    val pi = updateIntent(context)
     val exact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarms.canScheduleExactAlarms()
     if (exact) alarms.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, atMs, pi)
     else alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, atMs, pi)

@@ -15,7 +15,7 @@
     android:orientation="vertical" />
   <TextView android:id="@+id/dn_empty"
     android:layout_width="match_parent" android:layout_height="wrap_content"
-    android:textSize="13sp" android:textColor="@color/dn_secondary" android:text="Rien de prévu aujourd'hui" />
+    android:textSize="13sp" android:textColor="@color/dn_secondary" />
   <LinearLayout android:id="@+id/dn_late_box"
     android:layout_width="match_parent" android:layout_height="wrap_content"
     android:layout_marginTop="8dp" android:orientation="vertical"
