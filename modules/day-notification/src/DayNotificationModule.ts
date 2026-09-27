@@ -2,7 +2,8 @@ import { requireOptionalNativeModule } from 'expo';
 
 type DayNotificationNative = {
   show(json: string): void;
-  schedule(json: string, atMs: number): void;
+  /** Liste JSON de `DayUpdate` : chacune remplace la notification à son heure (la première peut être tout de suite). */
+  plan(json: string): void;
   cancel(): void;
 };
 

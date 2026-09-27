@@ -19,10 +19,10 @@ class DayNotificationModule : Module() {
     /** Affiche (ou remplace) la notification tout de suite. */
     Function("show") { json: String -> DayNotifier.post(context, json) }
 
-    /** Garde le contenu du prochain matin et le publie à l'heure dite (alarme exacte si permise). */
-    Function("schedule") { json: String, atMs: Double -> DayNotifier.schedule(context, json, atMs.toLong()) }
+    /** File des versions à venir `[{ at, payload }]`, publiées chacune à son heure (alarme exacte si permise). */
+    Function("plan") { json: String -> DayNotifier.plan(context, json) }
 
-    /** Retire la notification et l'alarme du matin. */
+    /** Retire la notification et les mises à jour prévues. */
     Function("cancel") { DayNotifier.cancel(context) }
   }
 }
