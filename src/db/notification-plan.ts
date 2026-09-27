@@ -2,7 +2,7 @@ import { addMinutes, format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import { getAgendaDays, getLateItems, occurrencesInRange, type Recurrence } from '@/db/agenda';
+import { type AgendaItem, getAgendaDays, getLateItems, occurrencesInRange, type Recurrence } from '@/db/agenda';
 import { ageAt, nextOccurrence } from '@/db/birthdays';
 import { OLD_DAYS } from '@/db/wishes';
 import type { DayPayload } from '../../modules/day-notification';
@@ -240,31 +240,44 @@ export type DaySummary = {
   title: string;
   /** Première ligne (visible repliée), puis le détail (visible dépliée). */
   body: string;
-  empty: boolean;
   /** Même contenu, structuré pour la mise en page native (modules/day-notification). */
   payload: DayPayload;
 };
 
+/** Sans heure de fin, un rendez-vous est considéré passé une heure après son début. */
+const DEFAULT_RDV_MIN = 60;
+const rdvEnd = (i: AgendaItem): Stamp => i.end ?? stamp(addMinutes(parseStamp(i.start!), DEFAULT_RDV_MIN));
+
 /**
  * Contenu de « Ma journée » pour un jour, vu à l'instant `ref` : anniversaires (du jour, du lendemain),
- * rendez-vous du jour, éléments en retard.
+ * rendez-vous du jour pas encore terminés, éléments en retard.
  */
 export async function getDaySummary(db: SQLiteDatabase, day: DayKey, ref: Date): Promise<DaySummary> {
   const [days, late] = await Promise.all([getAgendaDays(db, day, shiftDay(day, 1)), getLateItems(db, stamp(ref))]);
   const items = days[0]?.items ?? [];
-  const rdv = items.filter((i) => i.kind === 'event' && !i.cancelled);
+  const refStamp = stamp(ref);
+  const planned = items.filter((i) => i.kind === 'event' && !i.cancelled);
+  const rdv = planned.filter((r) => r.allDay || rdvEnd(r) > refStamp);
+  const passed = planned.length - rdv.length;
   const bdayText = (title: string) => title.replace('Anniv. ', 'anniversaire de ').replace(/ · (\d+) ans$/, ' ($1 ans)');
   const birthdays = [
     ...items.filter((i) => i.kind === 'birthday').map((i) => ({ lead: "Aujourd'hui", text: bdayText(i.title) })),
     ...(days[1]?.items ?? []).filter((i) => i.kind === 'birthday').map((i) => ({ lead: 'Demain', text: bdayText(i.title) })),
   ];
 
-  const refTime = dayKey(ref) === day ? format(ref, 'HH:mm') : '00:00';
-  const next = rdv.find((r) => !r.allDay && r.time >= refTime);
-  const rdvPart = rdv.length ? `${rdv.length} rdv aujourd'hui` : '';
+  // Le premier rdv à heure fixe qui reste : en cours ou à venir.
+  const next = rdv.find((r) => !r.allDay);
+  const nextLine = next
+    ? `${next.start! <= refStamp ? 'En cours' : 'Prochain'} : ${next.time} ${next.title}`
+    : birthdays.length ? `${birthdays[0].lead} : ${birthdays[0].text}` : '';
+  const rdvPart = rdv.length ? `${rdv.length} rdv ${passed ? (rdv.length > 1 ? 'restants' : 'restant') : "aujourd'hui"}` : '';
   const latePart = late.length ? `${late.length} en retard` : '';
-  const title = [rdvPart, latePart].filter(Boolean).join(' · ') || (birthdays.length ? 'Ma journée' : "Rien de prévu aujourd'hui");
-  const nextLine = next ? `Prochain : ${next.time} ${next.title}` : birthdays.length ? `${birthdays[0].lead} : ${birthdays[0].text}` : '';
+  const done = passed > 0 && !rdv.length;
+  const title = [rdvPart, latePart].filter(Boolean).join(' · ')
+    || (done ? "Plus de rendez-vous aujourd'hui" : birthdays.length ? 'Ma journée' : "Rien de prévu aujourd'hui");
+  // Rien à afficher dans le détail : un mot sympa plutôt qu'une notification vide.
+  const empty = done ? 'Tous les rendez-vous sont passés, quartier libre !' : 'Journée libre, profites-en !';
+  const isEmpty = !rdv.length && !late.length && !birthdays.length;
 
   const lines: string[] = [];
   if (nextLine) lines.push(nextLine);
@@ -275,19 +288,19 @@ export async function getDaySummary(db: SQLiteDatabase, day: DayKey, ref: Date):
     lines.push(...late.slice(0, 4).map((l) => `${l.type === 'event' ? 'RDV · ' : ''}${l.title} — ${dueLabel(l.due, ref)}`));
     if (late.length > 4) lines.push(`+${late.length - 4} autre${late.length > 5 ? 's' : ''}`);
   }
+  if (isEmpty) lines.push(empty);
 
   return {
     day,
     title,
     body: lines.join('\n').trim(),
-    empty: !rdv.length && !late.length && !birthdays.length,
     payload: {
       day,
       title: rdvPart || (latePart ? '' : title),
       titleAccent: latePart || undefined,
-      next: nextLine,
+      next: isEmpty ? empty : nextLine,
       birthdays,
-      rdvLabel: `Rendez-vous du jour · ${rdv.length}`,
+      rdvLabel: `${passed ? 'Rendez-vous restants' : 'Rendez-vous du jour'} · ${rdv.length}`,
       rdv: rdv.map((r) => ({
         time: r.allDay ? 'Journée' : r.time,
         title: r.title,
@@ -296,6 +309,34 @@ export async function getDaySummary(db: SQLiteDatabase, day: DayKey, ref: Date):
       })),
       lateLabel: `En retard · sans action · ${late.length}`,
       late: late.map((l) => ({ title: l.title, when: dueLabel(l.due, ref), rdv: l.type === 'event' })),
+      empty,
     },
   };
+}
+
+export type DayUpdate = { at: Date; summary: DaySummary };
+
+/**
+ * « Ma journée » d'un jour à partir de `from`, puis à chaque instant où elle change d'ici minuit :
+ * début d'un rdv (« En cours »), fin d'un rdv (il disparaît), échéance qui passe (« En retard »).
+ */
+export async function getDayUpdates(db: SQLiteDatabase, day: DayKey, from: Date): Promise<DayUpdate[]> {
+  const dayEnd = `${shiftDay(day, 1)}T00:00`;
+  const [days, late] = await Promise.all([getAgendaDays(db, day, day), getLateItems(db, dayEnd)]);
+  const fromStamp = stamp(from);
+  const times = new Set<Stamp>();
+  for (const i of days[0]?.items ?? []) {
+    if (i.kind !== 'event' || i.cancelled || i.allDay || !i.start) continue;
+    times.add(i.start).add(rdvEnd(i));
+  }
+  // Une échéance compte en retard à la minute qui suit.
+  for (const l of late) times.add(stamp(addMinutes(parseStamp(l.due), 1)));
+
+  const out: DayUpdate[] = [{ at: from, summary: await getDaySummary(db, day, from) }];
+  for (const t of [...times].filter((t) => t > fromStamp && t < dayEnd).sort()) {
+    const at = parseStamp(t);
+    const summary = await getDaySummary(db, day, at);
+    if (JSON.stringify(summary.payload) !== JSON.stringify(out[out.length - 1].summary.payload)) out.push({ at, summary });
+  }
+  return out;
 }
