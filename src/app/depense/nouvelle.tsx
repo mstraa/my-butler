@@ -20,9 +20,13 @@ import { type Category, getCategories } from '@/db/events';
 import {
   addExpense, deleteExpense, evalAmount, type ExpenseTask, formatCents, listExpenseTasks, updateExpense,
 } from '@/db/expenses';
+import {
+  addRecurring, deleteRecurring, FREQUENCIES, type Frequency, frequencyLabel, getRecurring, occurrence, type RecurringExpense,
+  updateRecurring,
+} from '@/db/recurring-expenses';
 import { setTaskDone } from '@/db/tasks';
 import { useDbMutation, useDbQuery } from '@/db/use-query';
-import { dayOf, mediumDayLabel, nowStamp, type Stamp, timeOf, todayKey } from '@/lib/dates';
+import { dateFieldLabel, type DayKey, dayOf, mediumDayLabel, nowStamp, type Stamp, timeOf, todayKey } from '@/lib/dates';
 import { colors, fonts } from '@/theme/tokens';
 
 const OPS = [
@@ -37,48 +41,71 @@ const isOp = (c: string) => '+−×÷'.includes(c);
 type Loaded = {
   categories: Category[];
   tasks: ExpenseTask[];
-  expense: { amountCents: number; label: string; categoryId: number | null; spentAt: Stamp } | null;
+  expense: { amountCents: number; label: string; categoryId: number | null; spentAt: Stamp; recurringId: number | null } | null;
+  /** Dépense récurrente modifiée (paramètre `recurring`). */
+  recurring: RecurringExpense | null;
 };
 
 /**
  * Saisie d'une dépense (maquette HF-Saisie) : pavé avec + − × ÷, catégorie, « glisser pour valider ».
  * « Tâche faite » : coche une tâche à dépense suivie avec son montant réel.
+ * « Une fois » / « Chaque mois »… : une dépense récurrente (abonnement, prêt) dont chaque échéance
+ * s'ajoute d'elle-même aux dépenses ; `repeat` la présélectionne.
  * `id` : modifier une dépense existante (même écran, sans le mode tâche).
+ * `recurring` : modifier une dépense récurrente (les prochaines échéances).
  */
 export default function ExpenseEntryScreen() {
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { id, recurring, repeat } = useLocalSearchParams<{ id?: string; recurring?: string; repeat?: Frequency }>();
   const editId = id ? Number(id) : null;
+  const recurringId = recurring ? Number(recurring) : null;
   const { data } = useDbQuery<Loaded>(async (db) => {
-    const [categories, tasks, row] = await Promise.all([
+    const [categories, tasks, row, rec] = await Promise.all([
       getCategories(db),
       listExpenseTasks(db),
       editId
-        ? db.getFirstAsync<{ amount_cents: number; label: string; category_id: number | null; spent_at: Stamp }>(
-            'SELECT amount_cents, label, category_id, spent_at FROM expenses WHERE id = ?', editId,
+        ? db.getFirstAsync<{ amount_cents: number; label: string; category_id: number | null; spent_at: Stamp; recurring_id: number | null }>(
+            'SELECT amount_cents, label, category_id, spent_at, recurring_id FROM expenses WHERE id = ?', editId,
           )
         : null,
+      recurringId ? getRecurring(db, recurringId) : null,
     ]);
     return {
       categories,
       tasks,
-      expense: row ? { amountCents: row.amount_cents, label: row.label, categoryId: row.category_id, spentAt: row.spent_at } : null,
+      expense: row
+        ? { amountCents: row.amount_cents, label: row.label, categoryId: row.category_id, spentAt: row.spent_at, recurringId: row.recurring_id }
+        : null,
+      recurring: rec,
     };
-  }, id ?? '');
+  }, `${id ?? ''}:${recurring ?? ''}`);
 
   if (!data) return <View style={{ flex: 1, backgroundColor: colors.sheet }} />;
-  return <Entry key={id ?? 'new'} editId={editId} {...data} />;
+  return (
+    <Entry
+      key={id ?? (recurring ? `r${recurring}` : 'new')}
+      editId={editId}
+      repeat={FREQUENCIES.some((f) => f.value === repeat) ? repeat! : null}
+      {...data}
+    />
+  );
 }
 
-function Entry({ editId, categories, tasks, expense }: Loaded & { editId: number | null }) {
+function Entry({ editId, categories, tasks, expense, recurring, repeat }: Loaded & { editId: number | null; repeat: Frequency | null }) {
   const mutate = useDbMutation();
   const cats = categories;
   const [mode, setMode] = useState<'expense' | 'task'>('expense');
-  const [expr, setExpr] = useState(expense ? formatCents(expense.amountCents, { euro: false }).replace(/ /g, '').replace(/,00$/, '') : '0');
+  const initial = recurring ?? expense;
+  const [expr, setExpr] = useState(initial ? formatCents(initial.amountCents, { euro: false }).replace(/ /g, '').replace(/,00$/, '') : '0');
   const [categoryId, setCategoryId] = useState<number | null>(
-    expense ? expense.categoryId : (cats.find((c) => c.key === 'groceries')?.id ?? null),
+    initial ? initial.categoryId : (cats.find((c) => c.key === 'groceries')?.id ?? null),
   );
-  const [label, setLabel] = useState(expense?.label ?? '');
+  const [label, setLabel] = useState(initial?.label ?? '');
   const [spentAt, setSpentAt] = useState<Stamp>(expense?.spentAt ?? nowStamp());
+  // Récurrence : null = une fois. Fixée quand on modifie une récurrente.
+  const [frequency, setFrequency] = useState<Frequency | null>(recurring?.frequency ?? repeat);
+  const [endsOn, setEndsOn] = useState<DayKey | null>(recurring?.endsOn ?? null);
+  const [pickingEnd, setPickingEnd] = useState(false);
+  const editingRecurring = !!recurring;
   const [taskId, setTaskId] = useState<number | null>(tasks[0]?.id ?? null);
   const [picking, setPicking] = useState(false);
   const [done, setDone] = useState<{ cents: number; where: string } | null>(null);
@@ -118,7 +145,21 @@ function Entry({ editId, categories, tasks, expense }: Loaded & { editId: number
       setDone({ cents, where: task.title });
       return true;
     }
-    const draft = { amountCents: cents, label: label.trim() || cat?.name || 'Dépense', categoryId, spentAt };
+    const name = label.trim() || cat?.name || 'Dépense';
+    if (recurring) {
+      await mutate((db) => updateRecurring(db, recurring.id, { amountCents: cents, label: name, categoryId, endsOn }));
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.back();
+      return true;
+    }
+    if (frequency) {
+      const startsOn = dayOf(spentAt);
+      await mutate((db) => addRecurring(db, { amountCents: cents, label: name, categoryId, frequency, startsOn, endsOn }));
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setDone({ cents, where: cat?.name ?? 'Dépenses' });
+      return true;
+    }
+    const draft = { amountCents: cents, label: name, categoryId, spentAt };
     if (editId) {
       await mutate((db) => updateExpense(db, editId, draft));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -162,11 +203,25 @@ function Entry({ editId, categories, tasks, expense }: Loaded & { editId: number
     setExpr('0');
     setLabel('');
     setSpentAt(nowStamp());
+    setFrequency(null);
+    setEndsOn(null);
     setSlideKey((k) => k + 1);
   };
 
   const remove = () =>
-    showDialog('Supprimer cette dépense ?', undefined, [
+    recurring
+      ? showDialog('Arrêter cette dépense récurrente ?', "Plus aucune échéance ne sera ajoutée. Celles déjà passées restent dans l'historique.", [
+          { text: 'Garder', style: 'cancel' },
+          {
+            text: 'Arrêter',
+            style: 'destructive',
+            onPress: async () => {
+              await mutate((db) => deleteRecurring(db, recurring.id));
+              router.back();
+            },
+          },
+        ])
+      : showDialog('Supprimer cette dépense ?', undefined, [
       { text: 'Garder', style: 'cancel' },
       {
         text: 'Supprimer',
@@ -182,6 +237,16 @@ function Entry({ editId, categories, tasks, expense }: Loaded & { editId: number
   const size = display.length > 9 ? 44 : display.length > 6 ? 56 : 72;
   const day = dayOf(spentAt);
   const when = day === todayKey() ? "Aujourd'hui" : mediumDayLabel(day);
+  const from = day === todayKey() ? "aujourd'hui" : `le ${dateFieldLabel(day)}`;
+  // Passe à la fréquence suivante : Une fois → Chaque mois → Chaque année → Chaque semaine → Une fois.
+  const cycleFrequency = () => {
+    Haptics.selectionAsync();
+    const i = frequency ? FREQUENCIES.findIndex((f) => f.value === frequency) : -1;
+    const next = FREQUENCIES[i + 1]?.value ?? null;
+    setFrequency(next);
+    if (!next) setEndsOn(null);
+  };
+  const startDay = recurring?.startsOn ?? day;
 
   return (
     <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: colors.sheet }}>
@@ -190,9 +255,9 @@ function Entry({ editId, categories, tasks, expense }: Loaded & { editId: number
         <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Fermer" style={styles.iconBtn}>
           <Icon name="x" color={colors.sheetText} />
         </Pressable>
-        {editId ? (
+        {editId || editingRecurring ? (
           <AppText variant="bodyStrong" color={colors.sheetText} style={{ fontSize: 16 }}>
-            Modifier la dépense
+            {editingRecurring ? 'Dépense récurrente' : 'Modifier la dépense'}
           </AppText>
         ) : (
           <View style={styles.segment} accessibilityRole="tablist">
@@ -218,8 +283,12 @@ function Entry({ editId, categories, tasks, expense }: Loaded & { editId: number
             })}
           </View>
         )}
-        {editId ? (
-          <Pressable onPress={remove} accessibilityRole="button" accessibilityLabel="Supprimer la dépense" style={styles.iconBtn}>
+        {editId || editingRecurring ? (
+          <Pressable
+            onPress={remove}
+            accessibilityRole="button"
+            accessibilityLabel={editingRecurring ? 'Arrêter la dépense récurrente' : 'Supprimer la dépense'}
+            style={styles.iconBtn}>
             <Icon name="trash" size={20} color={colors.sheetText} />
           </Pressable>
         ) : (
@@ -292,10 +361,18 @@ function Entry({ editId, categories, tasks, expense }: Loaded & { editId: number
           <AppText variant="body" color={colors.sheetTextSecondary} style={{ fontSize: 16 }}>
             = {formatCents(cents)}
           </AppText>
+        ) : recurring ? (
+          <AppText variant="body" color={colors.sheetTextSecondary} style={{ fontSize: 16, textAlign: 'center' }}>
+            {recurring.nextOn ? `Prochaine le ${dateFieldLabel(recurring.nextOn)}` : 'Terminée'} · {cat?.name ?? 'Sans catégorie'}
+          </AppText>
         ) : mode === 'expense' ? (
-          <Pressable onPress={() => setPicking(true)} accessibilityRole="button" accessibilityHint="Changer le jour" hitSlop={8}>
+          <Pressable
+            onPress={() => setPicking(true)}
+            accessibilityRole="button"
+            accessibilityHint={frequency ? 'Changer la première échéance' : 'Changer le jour'}
+            hitSlop={8}>
             <AppText variant="body" color={colors.sheetTextSecondary} style={{ fontSize: 16 }}>
-              {when} · {cat?.name ?? 'Sans catégorie'} ›
+              {frequency ? `Dès ${from}` : when} · {cat?.name ?? 'Sans catégorie'} ›
             </AppText>
           </Pressable>
         ) : (
@@ -315,6 +392,59 @@ function Entry({ editId, categories, tasks, expense }: Loaded & { editId: number
             returnKeyType="done"
             style={styles.label}
           />
+        )}
+        {mode === 'expense' && !editId && (
+          <View style={styles.repeatRow}>
+            {recurring ? (
+              <View style={styles.pill}>
+                <Icon name="repeat" size={14} color={colors.sheetText} strokeWidth={2} />
+                <AppText style={styles.pillText} color={colors.sheetText}>
+                  {frequencyLabel(recurring.frequency)}
+                </AppText>
+              </View>
+            ) : (
+              <Pressable
+                onPress={cycleFrequency}
+                accessibilityRole="button"
+                accessibilityLabel={`Répétition : ${frequency ? frequencyLabel(frequency) : 'une fois'}`}
+                accessibilityHint="Abonnement, prêt… : ajoutée d'elle-même à chaque échéance"
+                style={[styles.pill, frequency && styles.pillOn]}>
+                <Icon name="repeat" size={14} color={frequency ? colors.text : colors.sheetText} strokeWidth={2} />
+                <AppText style={styles.pillText} color={frequency ? colors.text : colors.sheetText}>
+                  {frequency ? frequencyLabel(frequency) : 'Une fois'}
+                </AppText>
+              </Pressable>
+            )}
+            {frequency && (
+              <View style={styles.pill}>
+                <Pressable
+                  onPress={() => setPickingEnd(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel={endsOn ? `Dernière échéance : ${dateFieldLabel(endsOn)}` : 'Sans fin, ajouter une date de fin'}
+                  hitSlop={8}>
+                  <AppText style={styles.pillText} color={colors.sheetText}>
+                    {endsOn ? `Jusqu'au ${dateFieldLabel(endsOn)}` : 'Sans fin ›'}
+                  </AppText>
+                </Pressable>
+                {endsOn && (
+                  <Pressable onPress={() => setEndsOn(null)} accessibilityRole="button" accessibilityLabel="Retirer la date de fin" hitSlop={10}>
+                    <Icon name="x" size={14} color={colors.sheetTextSecondary} strokeWidth={2} />
+                  </Pressable>
+                )}
+              </View>
+            )}
+          </View>
+        )}
+        {expense?.recurringId != null && (
+          <Pressable
+            onPress={() => router.replace({ pathname: '/depense/nouvelle', params: { recurring: String(expense.recurringId) } })}
+            accessibilityRole="button"
+            style={[styles.pill, { marginTop: 2 }]}>
+            <Icon name="repeat" size={14} color={colors.sheetText} strokeWidth={2} />
+            <AppText style={styles.pillText} color={colors.sheetText}>
+              Échéance récurrente · modifier ›
+            </AppText>
+          </Pressable>
         )}
       </View>
 
@@ -355,7 +485,7 @@ function Entry({ editId, categories, tasks, expense }: Loaded & { editId: number
       <SlideToConfirm
         key={slideKey}
         disabled={!cents || (mode === 'task' && !task)}
-        label={editId ? 'Glisser pour enregistrer' : 'Glisser pour valider'}
+        label={editId || editingRecurring ? 'Glisser pour enregistrer' : 'Glisser pour valider'}
         onConfirm={confirm}
       />
 
@@ -372,7 +502,11 @@ function Entry({ editId, categories, tasks, expense }: Loaded & { editId: number
             {formatCents(done.cents)}
           </AppText>
           <AppText variant="bodyMedium" color={colors.bg} style={{ fontSize: 16, textAlign: 'center', paddingHorizontal: 24 }}>
-            {mode === 'task' ? `« ${done.where} » cochée · ajoutée aux dépenses` : `Ajouté à ${done.where} · ${when.toLowerCase()}`}
+            {mode === 'task'
+              ? `« ${done.where} » cochée · ajoutée aux dépenses`
+              : frequency
+                ? `${frequencyLabel(frequency)} dans ${done.where} · dès ${from}`
+                : `Ajouté à ${done.where} · ${when.toLowerCase()}`}
           </AppText>
           <Pressable
             onPress={() => router.back()}
@@ -401,11 +535,22 @@ function Entry({ editId, categories, tasks, expense }: Loaded & { editId: number
 
       <DateTimeSheet
         visible={picking}
-        title="Jour de la dépense"
+        title={frequency ? 'Première échéance' : 'Jour de la dépense'}
         allDay
         value={{ day, start: '00:00', end: null }}
-        onDone={({ day: d }) => setSpentAt(`${d}T${timeOf(spentAt)}`)}
+        onDone={({ day: d }) => {
+          setSpentAt(`${d}T${timeOf(spentAt)}`);
+          if (endsOn && endsOn < d) setEndsOn(null);
+        }}
         onClose={() => setPicking(false)}
+      />
+      <DateTimeSheet
+        visible={pickingEnd}
+        title="Dernière échéance"
+        allDay
+        value={{ day: endsOn ?? occurrence(startDay, frequency ?? 'month', frequency === 'year' ? 10 : 12), start: '00:00', end: null }}
+        onDone={({ day: d }) => setEndsOn(d < startDay ? startDay : d)}
+        onClose={() => setPickingEnd(false)}
       />
     </SafeAreaView>
   );
@@ -543,6 +688,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
   },
+  repeatRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginTop: 2 },
+  pill: {
+    height: 32,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.sheetBorder,
+  },
+  pillOn: { backgroundColor: colors.sheetText, borderColor: colors.sheetText },
+  pillText: { fontFamily: fonts.bodyMedium, fontSize: 13 },
   ops: { flexDirection: 'row', gap: 8, paddingHorizontal: 28, paddingBottom: 10 },
   op: { flex: 1, height: 44, borderRadius: 14, backgroundColor: '#F4F4F5', alignItems: 'center', justifyContent: 'center' },
   keys: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 6, paddingHorizontal: 20, paddingBottom: 14 },

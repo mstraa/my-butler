@@ -159,7 +159,7 @@ export async function clearAllData(db: SQLiteDatabase) {
   await db.withTransactionAsync(async () => {
     await db.execAsync(`
       DELETE FROM gift_ideas; DELETE FROM gifts_given; DELETE FROM birthdays;
-      DELETE FROM deadline_log; DELETE FROM expenses; DELETE FROM tasks; DELETE FROM events;
+      DELETE FROM deadline_log; DELETE FROM expenses; DELETE FROM recurring_expenses; DELETE FROM tasks; DELETE FROM events;
       DELETE FROM goal_entries; DELETE FROM goals; DELETE FROM sleep_log; DELETE FROM eliquid_log;
       DELETE FROM tracker_entries; DELETE FROM trackers;
       DELETE FROM wishes; DELETE FROM budgets; DELETE FROM day_notes; DELETE FROM google_series;
