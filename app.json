@@ -76,6 +76,12 @@
           "color": "#F4F4F2"
         }
       ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Face ID sert à protéger l'onglet Dépenses."
+        }
+      ],
       "react-native-health-connect",
       [
         "expo-build-properties",
