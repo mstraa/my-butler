@@ -4,6 +4,8 @@ import type { IconName } from '@/components/icon';
 import type { Stamp } from '@/lib/dates';
 import { colors } from '@/theme/tokens';
 
+import { type Frequency, syncRecurring } from './recurring-expenses';
+
 /** Mois 'YYYY-MM'. */
 export type MonthKey = string;
 
@@ -25,6 +27,9 @@ export type Expense = {
   color: string;
   icon: IconName;
   taskId: number | null;
+  /** Échéance d'une dépense récurrente, et sa fréquence. */
+  recurringId: number | null;
+  frequency: Frequency | null;
 };
 
 export type CategoryShare = { id: number | null; name: string; color: string; cents: number; share: number };
@@ -42,14 +47,18 @@ export type MonthSummary = {
 type Row = {
   id: number; amount_cents: number; label: string; spent_at: Stamp; category_id: number | null;
   task_id: number | null; name: string | null; color: string | null; icon: string | null;
+  recurring_id: number | null; frequency: Frequency | null;
 };
 
 export async function getMonthSummary(db: SQLiteDatabase, month: MonthKey): Promise<MonthSummary> {
+  await syncRecurring(db);
   const prev = shiftMonthKey(month, -1);
   const [rows, prevRow, budget] = await Promise.all([
     db.getAllAsync<Row>(
-      `SELECT e.id, e.amount_cents, e.label, e.spent_at, e.category_id, e.task_id, c.name, c.color, c.icon
+      `SELECT e.id, e.amount_cents, e.label, e.spent_at, e.category_id, e.task_id, c.name, c.color, c.icon,
+              e.recurring_id, r.frequency
          FROM expenses e LEFT JOIN categories c ON c.id = e.category_id
+              LEFT JOIN recurring_expenses r ON r.id = e.recurring_id
         WHERE substr(e.spent_at, 1, 7) = ?
         ORDER BY e.spent_at DESC, e.id DESC`,
       month,
@@ -69,6 +78,8 @@ export async function getMonthSummary(db: SQLiteDatabase, month: MonthKey): Prom
     color: r.color ?? colors.textTertiary,
     icon: (r.icon as IconName) || 'wallet',
     taskId: r.task_id,
+    recurringId: r.recurring_id,
+    frequency: r.frequency,
   }));
   const total = expenses.reduce((s, e) => s + e.amountCents, 0);
   const shares = new Map<number | null, CategoryShare>();
@@ -85,6 +96,7 @@ export async function getMonthSummary(db: SQLiteDatabase, month: MonthKey): Prom
 
 /** Mois qui ont des dépenses, plus le mois courant, du plus récent au plus ancien. */
 export async function listExpenseMonths(db: SQLiteDatabase, current: MonthKey): Promise<MonthKey[]> {
+  await syncRecurring(db);
   const rows = await db.getAllAsync<{ m: string }>(
     'SELECT DISTINCT substr(spent_at, 1, 7) AS m FROM expenses ORDER BY m DESC',
   );

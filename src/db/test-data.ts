@@ -148,6 +148,20 @@ export async function seedTestData(db: SQLiteDatabase) {
         );
       }
     }
+    // Dépenses récurrentes : leurs échéances passées s'ajoutent à la prochaine lecture des dépenses.
+    const monthAgo = (n: number, dd: string) => `${shiftDay(`${t.slice(0, 8)}01`, -28 * n).slice(0, 8)}${dd}`;
+    for (const [label, catKey, cents, frequency, startsOn, endsOn] of [
+      ['Prêt immobilier', 'family', 98240, 'month', monthAgo(4, '05'), '2046-03-05'],
+      ['Netflix', 'personal', 1349, 'month', monthAgo(4, '12'), null],
+      ['Salle de sport', 'sport', 2990, 'month', monthAgo(3, '01'), null],
+      ['Assurance habitation', 'family', 21600, 'year', monthAgo(2, '20'), null],
+    ] as const) {
+      await db.runAsync(
+        `INSERT INTO recurring_expenses (amount_cents, label, category_id, frequency, starts_on, ends_on, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        cents, label, cat(catKey), frequency, startsOn, endsOn, created,
+      );
+    }
     // Ce mois-ci sous le budget, le mois dernier au-dessus : les deux états de la barre.
     await db.runAsync('INSERT INTO budgets (month, amount_cents) VALUES (?, 300000)', t.slice(0, 7));
     await db.runAsync('INSERT INTO budgets (month, amount_cents) VALUES (?, 180000)', shiftDay(`${t.slice(0, 8)}01`, -1).slice(0, 7));

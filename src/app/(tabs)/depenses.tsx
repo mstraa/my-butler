@@ -13,6 +13,7 @@ import { Icon } from '@/components/icon';
 import { Screen } from '@/components/screen';
 import { tabBarTop } from '@/components/tab-bar';
 import { type Expense, formatCents, getMonthSummary, monthOf, shiftMonthKey } from '@/db/expenses';
+import { frequencyLabel } from '@/db/recurring-expenses';
 import { useDbQuery } from '@/db/use-query';
 import { dayOf, mediumDayLabel, todayKey } from '@/lib/dates';
 import { monthLabel } from '@/lib/expense-format';
@@ -230,6 +231,13 @@ function Expenses() {
                       {s?.budget != null ? `Budget ${formatCents(s.budget).replace(',00', '')}` : 'Budget (facultatif)'}
                     </AppText>
                   </Pressable>
+                  <Pressable
+                    onPress={() => router.push('/depense/recurrentes')}
+                    accessibilityRole="button"
+                    accessibilityLabel="Dépenses récurrentes"
+                    style={({ pressed }) => [styles.roundBtn, pressed && { opacity: 0.8 }]}>
+                    <Icon name="repeat" size={18} color="#D4D4D8" strokeWidth={2} />
+                  </Pressable>
                 </View>
 
                 {s?.budget != null && <BudgetBar spent={s.total} budget={s.budget} />}
@@ -375,6 +383,7 @@ function Row({ e, last, delay }: { e: Expense; last: boolean; delay: number }) {
             {mediumDayLabel(dayOf(e.spentAt))}
             {e.category ? ` · ${e.category}` : ''}
             {e.taskId ? ' · tâche' : ''}
+            {e.frequency ? ` · ${frequencyLabel(e.frequency).toLowerCase()}` : ''}
           </AppText>
         </View>
         <AppText style={{ fontFamily: fonts.displayMedium, fontSize: 16 }} color={colors.sheetText}>
@@ -475,6 +484,7 @@ const styles = StyleSheet.create({
   },
   addDot: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.onLight, alignItems: 'center', justifyContent: 'center' },
   budgetBtn: { height: 40, paddingHorizontal: 16, borderRadius: 999, backgroundColor: '#232327', justifyContent: 'center' },
+  roundBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#232327', alignItems: 'center', justifyContent: 'center' },
   track: { height: 4, borderRadius: 2, backgroundColor: colors.border, overflow: 'hidden' },
   fill: { height: 4, borderRadius: 2 },
   compare: {

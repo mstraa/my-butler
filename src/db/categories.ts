@@ -33,6 +33,7 @@ export async function countCategoryUses(db: SQLiteDatabase, id: number) {
     `SELECT (SELECT COUNT(*) FROM events WHERE category_id = ?1)
           + (SELECT COUNT(*) FROM tasks WHERE category_id = ?1)
           + (SELECT COUNT(*) FROM expenses WHERE category_id = ?1)
+          + (SELECT COUNT(*) FROM recurring_expenses WHERE category_id = ?1)
           + (SELECT COUNT(*) FROM birthdays WHERE category_id = ?1) AS n`,
     id,
   );
@@ -42,7 +43,7 @@ export async function countCategoryUses(db: SQLiteDatabase, id: number) {
 /** Supprime la catégorie ; ce qui y était rangé passe « sans catégorie ». */
 export async function deleteCategory(db: SQLiteDatabase, id: number) {
   await db.withTransactionAsync(async () => {
-    for (const table of ['events', 'tasks', 'expenses', 'birthdays']) {
+    for (const table of ['events', 'tasks', 'expenses', 'recurring_expenses', 'birthdays']) {
       await db.runAsync(`UPDATE ${table} SET category_id = NULL WHERE category_id = ?`, id);
     }
     await forgetCalendarCategory(db, id);

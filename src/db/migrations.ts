@@ -243,6 +243,21 @@ const MIGRATIONS: string[] = [
     reminder_kind TEXT NOT NULL DEFAULT 'notif'
   );
   `,
+  /* v15 — dépenses récurrentes (abonnements, prêt…) : chaque échéance échue devient une dépense */ `
+  CREATE TABLE recurring_expenses (
+    id INTEGER PRIMARY KEY NOT NULL,
+    amount_cents INTEGER NOT NULL,
+    label TEXT NOT NULL,
+    category_id INTEGER REFERENCES categories(id),
+    frequency TEXT NOT NULL DEFAULT 'month', -- 'week' | 'month' | 'year'
+    starts_on TEXT NOT NULL,                 -- 1re échéance 'YYYY-MM-DD' (les suivantes en découlent)
+    ends_on TEXT,                            -- dernière échéance possible (fin d'un prêt) ; NULL = sans fin
+    generated INTEGER NOT NULL DEFAULT 0,    -- échéances déjà ajoutées aux dépenses
+    created_at TEXT NOT NULL
+  );
+  ALTER TABLE expenses ADD COLUMN recurring_id INTEGER REFERENCES recurring_expenses(id);
+  CREATE UNIQUE INDEX expenses_recurring ON expenses(recurring_id, spent_at) WHERE recurring_id IS NOT NULL;
+  `,
 ];
 
 export async function migrateDbIfNeeded(db: SQLiteDatabase) {
