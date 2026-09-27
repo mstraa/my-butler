@@ -1,6 +1,6 @@
 import * as Haptics from 'expo-haptics';
-import { router, useNavigation } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { router, useFocusEffect, useNavigation } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import { BackHandler, Pressable, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { Easing, Keyframe, useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
@@ -16,6 +16,7 @@ import { type Expense, formatCents, getMonthSummary, monthOf, shiftMonthKey } fr
 import { useDbQuery } from '@/db/use-query';
 import { dayOf, mediumDayLabel, todayKey } from '@/lib/dates';
 import { monthLabel } from '@/lib/expense-format';
+import { unlockExpenses, useExpensesUnlocked } from '@/lib/expense-lock';
 import { setExpenseView, useExpenseView } from '@/lib/expense-view';
 import { categoryColors, colors, fonts, withAlpha } from '@/theme/tokens';
 
@@ -35,6 +36,40 @@ const LIFT = TOTAL * (BIG - 1); // place en plus prise par le grand total
 const AIR = 16; // marge en plus en haut quand la feuille est fermée
 
 export default function DepensesScreen() {
+  const unlocked = useExpensesUnlocked();
+  // Demande l'empreinte à chaque arrivée sur l'onglet tant qu'il est verrouillé.
+  useFocusEffect(
+    useCallback(() => {
+      if (!unlocked) unlockExpenses();
+    }, [unlocked]),
+  );
+  return unlocked ? <Expenses /> : <Locked />;
+}
+
+/** Écran affiché tant que l'empreinte n'a pas été donnée. */
+function Locked() {
+  return (
+    <Screen style={styles.locked}>
+      <View style={styles.lockBadge}>
+        <Icon name="lock" size={28} />
+      </View>
+      <AppText variant="title">Dépenses verrouillées</AppText>
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          unlockExpenses();
+        }}
+        style={({ pressed }) => [styles.unlockBtn, pressed && { opacity: 0.8 }]}>
+        <AppText variant="body" color={colors.onLight}>
+          Déverrouiller
+        </AppText>
+      </Pressable>
+    </Screen>
+  );
+}
+
+function Expenses() {
   const insets = useSafeAreaInsets();
   const current = monthOf(todayKey());
   const { month, filter } = useExpenseView();
@@ -399,6 +434,18 @@ const rowEnter = (delay: number) =>
     .delay(delay);
 
 const styles = StyleSheet.create({
+  locked: { alignItems: 'center', justifyContent: 'center', gap: 16 },
+  lockBadge: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.surfaceRaised,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  unlockBtn: { height: 44, marginTop: 8, paddingHorizontal: 22, borderRadius: 999, backgroundColor: colors.text, justifyContent: 'center' },
   header: { height: 64, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20 },
   monthPill: {
     height: 36,
