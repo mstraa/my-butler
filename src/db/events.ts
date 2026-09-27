@@ -18,14 +18,20 @@ export type EventDraft = {
   allDay: boolean;
   location: string;
   reminderMin: number | null;
+  /** Rappel par notification, ou vraie alarme (sonnerie, plein écran). */
+  reminderKind: ReminderKind;
   recurrence: Recurrence;
   deadline: { label: string; at: Stamp } | null;
   notes: string;
 };
 
+export type ReminderKind = 'notif' | 'alarm';
+
 export type EventRecord = EventDraft & {
   id: number;
   source: 'app' | 'google';
+  /** Rendez-vous Google répété : id de la série (ses occurrences partagent le rappel), sinon null. */
+  googleSeries: string | null;
   /** Lien Google Meet (rendez-vous importés de Google Agenda). */
   meetUrl: string | null;
   deadlineState: 'open' | 'done' | 'abandoned' | null;
@@ -37,10 +43,10 @@ export type EventRecord = EventDraft & {
 export async function getEvent(db: SQLiteDatabase, id: number): Promise<EventRecord | null> {
   const r = await db.getFirstAsync<{
     id: number; title: string; category_id: number | null; starts_at: Stamp; ends_at: Stamp | null;
-    all_day: number; location: string | null; reminder_min: number | null; recurrence: Recurrence;
+    all_day: number; location: string | null; reminder_min: number | null; reminder_kind: ReminderKind; recurrence: Recurrence;
     deadline_at: Stamp | null; deadline_label: string | null; deadline_state: EventRecord['deadlineState'];
     source: 'app' | 'google'; cancelled_at: string | null; cancel_reason: string | null;
-    cancel_mode: 'keep' | 'hide' | null; notes: string | null; meet_url: string | null;
+    cancel_mode: 'keep' | 'hide' | null; notes: string | null; meet_url: string | null; external_id: string | null;
   }>('SELECT * FROM events WHERE id = ?', id);
   if (!r) return null;
   return {
@@ -52,10 +58,12 @@ export async function getEvent(db: SQLiteDatabase, id: number): Promise<EventRec
     allDay: !!r.all_day,
     location: r.location ?? '',
     reminderMin: r.reminder_min,
+    reminderKind: r.reminder_kind === 'alarm' ? 'alarm' : 'notif',
     recurrence: r.recurrence,
     deadline: r.deadline_at ? { label: r.deadline_label ?? '', at: r.deadline_at } : null,
     deadlineState: r.deadline_state,
     source: r.source,
+    googleSeries: r.source === 'google' ? seriesOf(r.external_id) : null,
     meetUrl: r.meet_url,
     cancelledAt: r.cancelled_at,
     cancelReason: r.cancel_reason,
@@ -64,13 +72,35 @@ export async function getEvent(db: SQLiteDatabase, id: number): Promise<EventRec
   };
 }
 
+/** « 1234@2026-09-28T07:00:00.000Z » (occurrence d'un évènement répété, voir listPhoneEvents) → « 1234 ». */
+export function seriesOf(externalId: string | null) {
+  const at = externalId?.lastIndexOf('@') ?? -1;
+  return at > 0 ? externalId!.slice(0, at) : null;
+}
+
+/**
+ * Rappel d'un rendez-vous Google répété : gardé pour la série (les occurrences importées plus tard le reprennent,
+ * voir applyGoogleSync) et appliqué à toutes les occurrences déjà là.
+ */
+async function setSeriesReminder(db: SQLiteDatabase, series: string, min: number | null, kind: ReminderKind) {
+  await db.runAsync(
+    `INSERT INTO google_series (series_id, reminder_min, reminder_kind) VALUES (?, ?, ?)
+     ON CONFLICT(series_id) DO UPDATE SET reminder_min = excluded.reminder_min, reminder_kind = excluded.reminder_kind`,
+    series, min, kind,
+  );
+  await db.runAsync(
+    "UPDATE events SET reminder_min = ?, reminder_kind = ? WHERE source = 'google' AND external_id LIKE ? ESCAPE '\\'",
+    min, kind, `${series.replace(/[\\%_]/g, (c) => `\\${c}`)}@%`,
+  );
+}
+
 export async function createEvent(db: SQLiteDatabase, d: EventDraft) {
   const res = await db.runAsync(
-    `INSERT INTO events (title, category_id, starts_at, ends_at, all_day, location, reminder_min, recurrence,
+    `INSERT INTO events (title, category_id, starts_at, ends_at, all_day, location, reminder_min, reminder_kind, recurrence,
                          deadline_at, deadline_label, deadline_state, notes, source, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'app', ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'app', ?)`,
     d.title.trim(), d.categoryId, d.startsAt, d.allDay ? null : d.endsAt, d.allDay ? 1 : 0,
-    (d.location ?? '').trim() || null, d.reminderMin, d.recurrence,
+    (d.location ?? '').trim() || null, d.reminderMin, d.reminderKind, d.recurrence,
     d.deadline?.at ?? null, d.deadline ? d.deadline.label.trim() || null : null, d.deadline ? 'open' : null,
     (d.notes ?? '').trim() || null, nowStamp(),
   );
@@ -87,14 +117,15 @@ export async function updateEvent(db: SQLiteDatabase, id: number, d: EventDraft)
     : null;
   await db.runAsync(
     `UPDATE events SET title = ?, category_id = ?, starts_at = ?, ends_at = ?, all_day = ?, location = ?,
-                       reminder_min = ?, recurrence = ?, deadline_at = ?, deadline_label = ?, deadline_state = ?,
+                       reminder_min = ?, reminder_kind = ?, recurrence = ?, deadline_at = ?, deadline_label = ?, deadline_state = ?,
                        notes = ?
       WHERE id = ?`,
     d.title.trim(), d.categoryId, d.startsAt, d.allDay ? null : d.endsAt, d.allDay ? 1 : 0,
-    (d.location ?? '').trim() || null, d.reminderMin, d.recurrence,
+    (d.location ?? '').trim() || null, d.reminderMin, d.reminderKind, d.recurrence,
     d.deadline?.at ?? null, d.deadline ? d.deadline.label.trim() || null : null, deadlineState,
     (d.notes ?? '').trim() || null, id,
   );
+  if (prev?.googleSeries) await setSeriesReminder(db, prev.googleSeries, d.reminderMin, d.reminderKind);
 }
 
 export async function deleteEvent(db: SQLiteDatabase, id: number) {

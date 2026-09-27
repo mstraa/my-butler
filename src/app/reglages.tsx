@@ -13,7 +13,10 @@ import { getNotifSettings, type NotifSettings, setNotifSetting } from '@/db/noti
 import { clearAllData } from '@/db/seed';
 import { seedTestData } from '@/db/test-data';
 import { invalidate, useDbMutation, useDbQuery } from '@/db/use-query';
-import { notificationsAllowed, setupNotifications, testNotification } from '@/lib/notifications';
+import {
+  alarmsFullScreenAllowed, nativeAlarms, notificationsAllowed, openAlarmFullScreenSettings, setupNotifications, testAlarm,
+  testNotification,
+} from '@/lib/notifications';
 import { colors, fonts } from '@/theme/tokens';
 
 const JOURNEE_TIMES = ['07:00', '07:30', '08:00', '09:00'];
@@ -29,7 +32,7 @@ export default function SettingsScreen() {
       getNotifSettings(db),
       notificationsAllowed(),
     ]);
-    return { categories, demo: demo?.value === '1', notif, allowed };
+    return { categories, demo: demo?.value === '1', notif, allowed, fullScreen: alarmsFullScreenAllowed() };
   });
 
   const setNotif = <K extends keyof NotifSettings>(key: K, value: NotifSettings[K]) => {
@@ -108,6 +111,29 @@ export default function SettingsScreen() {
               </View>
             )}
             <SwitchRow icon="bell" label="Rappels et échéances" value={data.notif.rappels} onChange={(v) => setNotif('rappels', v)} />
+            <SwitchRow icon="alarm" label="Alarmes" value={data.notif.alarmes} onChange={(v) => setNotif('alarmes', v)} />
+            {data.notif.alarmes && (
+              <View style={{ gap: 8, paddingLeft: 44 }}>
+                <AppText variant="caption">
+                  {nativeAlarms
+                    ? 'Sonnerie du réveil en boucle, même en silencieux, et plein écran. Se règlent sur chaque rendez-vous (type de rappel), objectif et suivi.'
+                    : 'Dans cette version de l\'app, les alarmes arrivent comme de simples notifications.'}
+                </AppText>
+                {!data.fullScreen && (
+                  <Pressable
+                    onPress={() => {
+                      openAlarmFullScreenSettings();
+                      setTimeout(invalidate, 1500);
+                    }}
+                    accessibilityRole="button"
+                    style={styles.devBtn}>
+                    <AppText style={{ fontFamily: fonts.bodySemiBold, fontSize: 14 }} color={colors.late}>
+                      Autoriser le plein écran des alarmes
+                    </AppText>
+                  </Pressable>
+                )}
+              </View>
+            )}
             <SwitchRow icon="cake" label="Anniversaires" value={data.notif.anniversaires} onChange={(v) => setNotif('anniversaires', v)} />
             <SwitchRow icon="heart" label="Envies de 30 jours" value={data.notif.envies} onChange={(v) => setNotif('envies', v)} />
             <AppText variant="caption" style={styles.hint}>
@@ -187,6 +213,16 @@ export default function SettingsScreen() {
               style={({ pressed }) => [styles.devBtn, pressed && { opacity: 0.7 }]}>
               <AppText style={{ fontFamily: fonts.bodySemiBold, fontSize: 14 }}>Notification de test (10 s)</AppText>
             </Pressable>
+            {nativeAlarms && (
+              <Pressable
+                onPress={() => {
+                  if (testAlarm()) showDialog('Alarme dans 10 s', 'Verrouille le téléphone pour voir l’écran plein.');
+                }}
+                accessibilityRole="button"
+                style={({ pressed }) => [styles.devBtn, pressed && { opacity: 0.7 }]}>
+                <AppText style={{ fontFamily: fonts.bodySemiBold, fontSize: 14 }}>Alarme de test (10 s)</AppText>
+              </Pressable>
+            )}
           </Section>
         )}
       </ScrollView>

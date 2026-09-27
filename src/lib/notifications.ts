@@ -1,18 +1,22 @@
+import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import { router } from 'expo-router';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { Platform } from 'react-native';
 
+import AlarmClock, { type AlarmSpec } from '../../modules/alarm-clock';
 import DayNotification from '../../modules/day-notification';
 
-import { getDaySummary, getNotifSettings, planNotifications, type NotifChannel } from '@/db/notification-plan';
+import { getDaySummary, getNotifSettings, planNotifications, type NotifChannel, type PlannedNotif } from '@/db/notification-plan';
 import { dayKey, parseStamp, shiftDay } from '@/lib/dates';
 
 /*
  * Notifications locales (rien ne passe par un serveur) :
  * - « Ma journée » : notification épinglée, remplacée chaque matin et à chaque changement ;
  * - rappels planifiés (rendez-vous, tâches, échéances, anniversaires, envies), tous replanifiés
- *   à chaque synchronisation — le plan complet vient de db/notification-plan.
+ *   à chaque synchronisation — le plan complet vient de db/notification-plan ;
+ * - alarmes (rendez-vous, objectifs, suivis) : sonnerie et écran plein, par le module natif alarm-clock
+ *   (sans lui, en Expo Go : de simples notifications).
  */
 
 const JOURNEE_ID = 'journee';
@@ -89,8 +93,13 @@ async function syncOnce(db: SQLiteDatabase) {
   const settings = await getNotifSettings(db);
   const plan = await planNotifications(db, settings, now);
 
+  // Alarmes : au module natif s'il est là, sinon notifications comme les autres.
+  const alarms = AlarmClock ? plan.filter((n) => n.alarm) : [];
+  AlarmClock?.setAlarms(JSON.stringify(alarms.map(alarmSpec)));
+
   await Notifications.cancelAllScheduledNotificationsAsync();
   for (const n of plan) {
+    if (AlarmClock && n.alarm) continue;
     await Notifications.scheduleNotificationAsync({
       identifier: n.id,
       content: { title: n.title, body: n.body, data: { url: n.url }, color: '#F4F4F2' },
@@ -136,6 +145,30 @@ async function syncOnce(db: SQLiteDatabase) {
       trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: nextAt, channelId: JOURNEE_CHANNEL },
     });
   }
+}
+
+/** Lien profond vers l'écran de l'alarme (« Ouvrir dans l'app »), avec le schéma de cette variante de l'app. */
+function alarmSpec(n: PlannedNotif): AlarmSpec {
+  const scheme = [Constants.expoConfig?.scheme].flat()[0] ?? 'mypersonallife';
+  return { id: n.id, at: n.at.getTime(), title: n.title, body: n.body, link: `${scheme}://${n.url.replace(/^\//, '')}`, health: n.health };
+}
+
+/** Android 14+ : l'écran plein des alarmes demande une autorisation (accordée d'office hors Play Store, en général). */
+export function alarmsFullScreenAllowed() {
+  return AlarmClock ? AlarmClock.canUseFullScreen() : true;
+}
+
+export function openAlarmFullScreenSettings() {
+  AlarmClock?.openFullScreenSettings();
+}
+
+export const nativeAlarms = !!AlarmClock;
+
+/** Développement : une alarme dans 10 s (sans le module natif, rien). */
+export function testAlarm() {
+  if (!AlarmClock) return false;
+  AlarmClock.test(10, 'Alarme de test', 'Arrêter, répéter ou ouvrir');
+  return true;
 }
 
 function journeeContent(title: string, body: string): Notifications.NotificationContentInput {

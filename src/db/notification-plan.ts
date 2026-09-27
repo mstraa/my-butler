@@ -4,8 +4,12 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { getAgendaDays, getLateItems, occurrencesInRange, type Recurrence } from '@/db/agenda';
 import { ageAt, nextOccurrence } from '@/db/birthdays';
+import { fmtGoal, listGoals, periodRange } from '@/db/goals';
+import { getDayTrackers, healthMetricOf } from '@/db/tracking';
 import { OLD_DAYS } from '@/db/wishes';
+import type { AlarmHealthCheck } from '../../modules/alarm-clock';
 import type { DayPayload } from '../../modules/day-notification';
+import { alarmOnDay } from '@/lib/alarm';
 import { dayKey, dayOf, type DayKey, parseDay, parseStamp, shiftDay, type Stamp, stamp, timeOf } from '@/lib/dates';
 
 /*
@@ -23,6 +27,10 @@ export type PlannedNotif = {
   body: string;
   /** Écran ouvert au toucher. */
   url: string;
+  /** Vraie alarme (sonnerie, écran plein) plutôt qu'une notification. */
+  alarm?: boolean;
+  /** Alarme d'un suivi relié à Health Connect : relu au moment de sonner, elle se tait si c'est déjà fait. */
+  health?: AlarmHealthCheck;
 };
 
 export type NotifSettings = {
@@ -35,13 +43,15 @@ export type NotifSettings = {
   anniversaires: boolean;
   /** Envie en attente depuis 30 jours. */
   envies: boolean;
+  /** Alarmes (rendez-vous réglés sur « Alarme », objectifs et suivis). */
+  alarmes: boolean;
 };
 
-export const DEFAULT_SETTINGS: NotifSettings = { journee: true, journeeTime: '07:30', rappels: true, anniversaires: true, envies: true };
+export const DEFAULT_SETTINGS: NotifSettings = { journee: true, journeeTime: '07:30', rappels: true, anniversaires: true, envies: true, alarmes: true };
 
 const KEYS: Record<keyof NotifSettings, string> = {
   journee: 'notif:journee', journeeTime: 'notif:journee_time', rappels: 'notif:rappels',
-  anniversaires: 'notif:anniversaires', envies: 'notif:envies',
+  anniversaires: 'notif:anniversaires', envies: 'notif:envies', alarmes: 'notif:alarmes',
 };
 
 export async function getNotifSettings(db: SQLiteDatabase): Promise<NotifSettings> {
@@ -54,6 +64,7 @@ export async function getNotifSettings(db: SQLiteDatabase): Promise<NotifSetting
     rappels: flag('rappels'),
     anniversaires: flag('anniversaires'),
     envies: flag('envies'),
+    alarmes: flag('alarmes'),
   };
 }
 
@@ -99,17 +110,19 @@ export async function planNotifications(db: SQLiteDatabase, s: NotifSettings, no
     if (n.at.getTime() > now.getTime() + 5_000) out.push(n);
   };
 
-  if (s.rappels) {
-    /* Rendez-vous : rappel avant chaque occurrence (répétitions comprises). */
+  if (s.rappels || s.alarmes) {
+    /* Rendez-vous : rappel avant chaque occurrence (répétitions comprises), en notification ou en alarme. */
     const events = await db.getAllAsync<{
       id: number; title: string; starts_at: Stamp; all_day: number; location: string | null;
-      reminder_min: number; recurrence: Recurrence;
+      reminder_min: number; reminder_kind: string; recurrence: Recurrence;
     }>(
-      `SELECT id, title, starts_at, all_day, location, reminder_min, recurrence FROM events
+      `SELECT id, title, starts_at, all_day, location, reminder_min, reminder_kind, recurrence FROM events
         WHERE reminder_min IS NOT NULL AND cancelled_at IS NULL AND starts_at < ?`,
       `${shiftDay(today, EVENT_DAYS + 1)}T00:00`,
     );
     for (const e of events) {
+      const alarm = e.reminder_kind === 'alarm';
+      if (!(alarm ? s.alarmes : s.rappels)) continue;
       const time = e.all_day ? '09:00' : timeOf(e.starts_at);
       for (const occ of occurrencesInRange(dayOf(e.starts_at), e.recurrence, today, shiftDay(today, EVENT_DAYS))) {
         const start = at(occ, time);
@@ -121,9 +134,15 @@ export async function planNotifications(db: SQLiteDatabase, s: NotifSettings, no
           title: e.title,
           body: `${beforeLabel(e.reminder_min)} · ${details}`,
           url: `/rdv/apercu/${e.id}?day=${occ}`,
+          alarm,
         });
       }
     }
+  }
+
+  if (s.alarmes) await planDailyAlarms(db, today, push);
+
+  if (s.rappels) {
 
     /* Échéances des rendez-vous (« confirmer avant mardi ») : au moment où elles passent. */
     const deadlines = await db.getAllAsync<{ id: number; title: string; label: string | null; deadline_at: Stamp }>(
@@ -234,6 +253,63 @@ export async function planNotifications(db: SQLiteDatabase, s: NotifSettings, no
   return out.sort((a, b) => a.at.getTime() - b.at.getTime()).slice(0, MAX_NOTIFS);
 }
 
+/**
+ * Alarmes quotidiennes des objectifs et des suivis, aux jours choisis. Pas d'alarme quand c'est déjà fait :
+ * objectif atteint sur la période en cours, suivi déjà noté aujourd'hui (le plan est recalculé à chaque saisie).
+ * Suivi relié à Health Connect : ses valeurs arrivent sans l'app, l'alarme relit donc Health Connect en sonnant.
+ */
+async function planDailyAlarms(db: SQLiteDatabase, today: DayKey, push: (n: PlannedNotif) => void) {
+  const PERIOD = { day: 'par jour', week: 'par semaine', month: 'par mois' } as const;
+  for (const g of await listGoals(db, today)) {
+    if (!g.alarm) continue;
+    const periodEnd = periodRange(g.period, today)[1];
+    const what = g.kind === 'bool' ? 'Fait aujourd\'hui ?' : `${fmtGoal(g.target)}${g.unit ? ` ${g.unit}` : ''} ${PERIOD[g.period]}`;
+    for (let i = 0; i <= EVENT_DAYS; i++) {
+      const day = shiftDay(today, i);
+      if (!alarmOnDay(g.alarm.days, day)) continue;
+      // Période en cours déjà atteinte (ou oui/non déjà répondu aujourd'hui) : rien jusqu'à la suivante.
+      if (day <= periodEnd && (g.done || (g.kind === 'bool' && day === today && g.answered))) continue;
+      const progress = day <= periodEnd && g.kind !== 'bool' ? ` · ${fmtGoal(g.value)} / ${fmtGoal(g.target)} pour l'instant` : '';
+      push({
+        id: `alarme-objectif-${g.id}-${day}`,
+        at: at(day, g.alarm.time),
+        channel: 'rappels',
+        title: g.title,
+        body: `Objectif · ${what}${i === 0 ? progress : ''}`,
+        url: '/objectifs',
+        alarm: true,
+      });
+    }
+  }
+
+  for (const t of await getDayTrackers(db, today)) {
+    if (!t.alarm) continue;
+    const metric = t.source === 'health' ? healthMetricOf(t) : null;
+    const health: AlarmHealthCheck | undefined =
+      metric === 'steps' ? { metric: 'steps', goal: t.goal ?? 0 } : metric === 'sleep' ? { metric: 'sleep' } : undefined;
+    // Déjà noté aujourd'hui ; pour les pas importés, seulement si l'objectif est atteint (sinon il en manque).
+    const doneToday = metric === 'steps' ? t.goal !== null && (t.value ?? 0) >= t.goal : t.value !== null;
+    for (let i = 0; i <= EVENT_DAYS; i++) {
+      const day = shiftDay(today, i);
+      if (!alarmOnDay(t.alarm.days, day)) continue;
+      if (i === 0 && doneToday) continue;
+      push({
+        id: `alarme-suivi-${t.id}-${day}`,
+        at: at(day, t.alarm.time),
+        channel: 'rappels',
+        title: t.name,
+        body:
+          metric === 'steps'
+            ? t.goal ? `Suivi · objectif de ${fmtGoal(t.goal)} pas non atteint` : 'Suivi · tes pas du jour'
+            : metric === 'sleep' ? 'Suivi · ta nuit n\'est pas encore arrivée de Health Connect' : 'Suivi · pense à noter ta valeur du jour',
+        url: '/suivi',
+        alarm: true,
+        health,
+      });
+    }
+  }
+}
+
 export type DaySummary = {
   day: DayKey;
   /** Repliée : « 3 rdv aujourd'hui · 3 en retard » (texte seul, pour la notification standard). */
@@ -247,12 +323,14 @@ export type DaySummary = {
 
 /**
  * Contenu de « Ma journée » pour un jour, vu à l'instant `ref` : anniversaires (du jour, du lendemain),
- * rendez-vous du jour, éléments en retard.
+ * rendez-vous du jour pas encore terminés, éléments en retard.
  */
 export async function getDaySummary(db: SQLiteDatabase, day: DayKey, ref: Date): Promise<DaySummary> {
   const [days, late] = await Promise.all([getAgendaDays(db, day, shiftDay(day, 1)), getLateItems(db, stamp(ref))]);
   const items = days[0]?.items ?? [];
-  const rdv = items.filter((i) => i.kind === 'event' && !i.cancelled);
+  // Rendez-vous pas encore terminés à l'instant `ref` (sans fin : pas encore commencés) ; ceux de la journée entière restent.
+  const refStamp = stamp(ref);
+  const rdv = items.filter((i) => i.kind === 'event' && !i.cancelled && (i.allDay || (i.end ?? i.start ?? '') >= refStamp));
   const bdayText = (title: string) => title.replace('Anniv. ', 'anniversaire de ').replace(/ · (\d+) ans$/, ' ($1 ans)');
   const birthdays = [
     ...items.filter((i) => i.kind === 'birthday').map((i) => ({ lead: "Aujourd'hui", text: bdayText(i.title) })),
@@ -261,7 +339,7 @@ export async function getDaySummary(db: SQLiteDatabase, day: DayKey, ref: Date):
 
   const refTime = dayKey(ref) === day ? format(ref, 'HH:mm') : '00:00';
   const next = rdv.find((r) => !r.allDay && r.time >= refTime);
-  const rdvPart = rdv.length ? `${rdv.length} rdv aujourd'hui` : '';
+  const rdvPart = rdv.length ? `${rdv.length} rdv à venir` : '';
   const latePart = late.length ? `${late.length} en retard` : '';
   const title = [rdvPart, latePart].filter(Boolean).join(' · ') || (birthdays.length ? 'Ma journée' : "Rien de prévu aujourd'hui");
   const nextLine = next ? `Prochain : ${next.time} ${next.title}` : birthdays.length ? `${birthdays[0].lead} : ${birthdays[0].text}` : '';
@@ -287,7 +365,7 @@ export async function getDaySummary(db: SQLiteDatabase, day: DayKey, ref: Date):
       titleAccent: latePart || undefined,
       next: nextLine,
       birthdays,
-      rdvLabel: `Rendez-vous du jour · ${rdv.length}`,
+      rdvLabel: `Rendez-vous à venir · ${rdv.length}`,
       rdv: rdv.map((r) => ({
         time: r.allDay ? 'Journée' : r.time,
         title: r.title,

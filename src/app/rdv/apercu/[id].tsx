@@ -297,7 +297,7 @@ function PreviewTop({
   type Info = { icon: IconName; label: string; value: string | null; color?: string };
   const allInfos: Info[] = [
     { icon: 'pin', label: 'Lieu', value: e.location || null },
-    { icon: 'bell', label: 'Rappel', value: reminderLabel(e.reminderMin) },
+    { icon: e.reminderKind === 'alarm' ? 'alarm' : 'bell', label: e.reminderKind === 'alarm' ? 'Alarme' : 'Rappel', value: reminderLabel(e.reminderMin) },
     { icon: 'repeat', label: 'Répéter', value: recurrenceLabel(e.recurrence) },
     {
       icon: 'flag',

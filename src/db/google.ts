@@ -1,11 +1,13 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { nowStamp } from '@/lib/dates';
+import { seriesOf } from '@/db/events';
 import type { PhoneEvent } from '@/lib/google-calendar';
 
 /*
  * Import Google Agenda, en lecture seule. Titre, horaires, lieu et lien Meet viennent du téléphone et sont
  * réécrits à chaque synchro ; catégorie, notes, rappel, échéance et annulation restent dans l'app.
+ * Un rendez-vous répété arrive en occurrences séparées : son rappel est gardé pour la série (table google_series).
  */
 
 /** Agendas importés, avec la catégorie donnée à leurs rendez-vous (null = sans catégorie). */
@@ -96,6 +98,11 @@ export async function applyGoogleSync(
          FROM events WHERE source = 'google' AND external_id IS NOT NULL`,
     );
     const byExt = new Map(existing.map((r) => [r.external_id, r]));
+    const series = new Map(
+      (await db.getAllAsync<{ series_id: string; reminder_min: number | null; reminder_kind: string }>('SELECT * FROM google_series')).map(
+        (s) => [s.series_id, s],
+      ),
+    );
     const seen = new Set<string>();
 
     for (const e of events) {
@@ -103,12 +110,14 @@ export async function applyGoogleSync(
       seen.add(e.externalId);
       const prev = byExt.get(e.externalId);
       if (!prev) {
+        // Nouvelle occurrence d'une série qui a un rappel : elle le reprend.
+        const s = series.get(seriesOf(e.externalId) ?? '');
         await db.runAsync(
           `INSERT INTO events (title, category_id, starts_at, ends_at, all_day, location, meet_url, recurrence,
-                               source, external_id, calendar_id, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, 'none', 'google', ?, ?, ?)`,
+                               reminder_min, reminder_kind, source, external_id, calendar_id, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'none', ?, ?, 'google', ?, ?, ?)`,
           e.title, calendars[e.calendarId], e.startsAt, e.endsAt, e.allDay ? 1 : 0, e.location, e.meetUrl,
-          e.externalId, e.calendarId, nowStamp(),
+          s?.reminder_min ?? null, s?.reminder_kind ?? 'notif', e.externalId, e.calendarId, nowStamp(),
         );
         changed++;
       } else if (

@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppText } from '@/components/app-text';
 import { showDialog } from '@/components/dialog';
+import { AlarmField, AlarmTimeSheet } from '@/components/form/alarm-field';
 import { Chip, FieldLabel, TextField } from '@/components/form/fields';
 import { Icon, type IconName } from '@/components/icon';
 import { GOAL_COLORS } from '@/db/agenda';
@@ -42,6 +43,7 @@ export function GoalForm({ title, initial, onSave, onArchive, onDelete }: Props)
   const [targetText, setTargetText] = useState(initial.kind === 'bool' || !initial.target ? '' : String(initial.target).replace('.', ','));
   const [showErrors, setShowErrors] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [pickingTime, setPickingTime] = useState(false);
   const set = (patch: Partial<GoalDraft>) => setD((c) => ({ ...c, ...patch }));
 
   const target = Number(targetText.replace(',', '.'));
@@ -197,6 +199,19 @@ export function GoalForm({ title, initial, onSave, onArchive, onDelete }: Props)
             </View>
           </Animated.View>
 
+          <Animated.View entering={FadeInDown.delay(80).duration(260)}>
+            <AlarmField
+              value={d.alarm}
+              onChange={(alarm) => set({ alarm })}
+              onPickTime={() => setPickingTime(true)}
+              hint={
+                d.period === 'day'
+                  ? "Ne sonne pas si l'objectif du jour est déjà atteint."
+                  : `Ne sonne plus une fois l'objectif ${d.period === 'week' ? 'de la semaine' : 'du mois'} atteint.`
+              }
+            />
+          </Animated.View>
+
           {(onArchive || onDelete) && (
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 6 }}>
               {onArchive && (
@@ -247,6 +262,9 @@ export function GoalForm({ title, initial, onSave, onArchive, onDelete }: Props)
           )}
         </ScrollView>
       </KeyboardAvoidingView>
+      {pickingTime && d.alarm && (
+        <AlarmTimeSheet value={d.alarm.time} onDone={(time) => set({ alarm: { ...d.alarm!, time } })} onClose={() => setPickingTime(false)} />
+      )}
     </SafeAreaView>
   );
 }

@@ -12,7 +12,7 @@ import { NoteEditor } from '@/components/form/note-editor';
 import { Chip, FieldLabel, OptionSheet, PickerField, SwitchRow, TextField } from '@/components/form/fields';
 import { Icon } from '@/components/icon';
 import type { Category, EventDraft } from '@/db/events';
-import { RECURRENCES, REMINDERS } from '@/lib/event-options';
+import { RECURRENCES, REMINDER_KINDS, REMINDERS } from '@/lib/event-options';
 import { dateFieldLabel, dayOf, minutesOf, parseDay, shiftDay, type Stamp, stamp, timeOf } from '@/lib/dates';
 import { colors, fonts } from '@/theme/tokens';
 
@@ -38,7 +38,7 @@ const addMinutes = (s: Stamp, min: number) => {
 /** Formulaire « Nouveau rendez-vous » / « Modifier le rendez-vous » (maquette HF-NouveauRdv). */
 export function EventForm({ title, initial, categories, onSave, onDelete, readOnlyNote, external }: Props) {
   const [d, setD] = useState<EventDraft>(() => ({ ...initial, notes: initial.notes ?? '', location: initial.location ?? '' }));
-  const [sheet, setSheet] = useState<'reminder' | 'repeat' | 'when' | 'deadline' | null>(null);
+  const [sheet, setSheet] = useState<'reminder' | 'reminderKind' | 'repeat' | 'when' | 'deadline' | null>(null);
   const [saving, setSaving] = useState(false);
   const [showErrors, setShowErrors] = useState(false);
 
@@ -202,6 +202,16 @@ export function EventForm({ title, initial, categories, onSave, onDelete, readOn
               onPress={() => setSheet('repeat')}
             />
           </View>
+          {d.reminderMin !== null && (
+            <Animated.View entering={FadeIn.duration(200)}>
+              <PickerField
+                label="Type de rappel"
+                chevron
+                value={d.reminderKind === 'alarm' ? 'Alarme · sonnerie et plein écran' : 'Notification'}
+                onPress={() => setSheet('reminderKind')}
+              />
+            </Animated.View>
+          )}
 
           <Animated.View layout={LinearTransition.duration(250)} style={styles.deadlineCard}>
             <SwitchRow label="Échéance avant le rdv" icon="timer" value={!!d.deadline} onChange={toggleDeadline} />
@@ -290,6 +300,14 @@ export function EventForm({ title, initial, categories, onSave, onDelete, readOn
         options={REMINDERS}
         value={d.reminderMin}
         onPick={(reminderMin) => set({ reminderMin })}
+        onClose={() => setSheet(null)}
+      />
+      <OptionSheet
+        visible={sheet === 'reminderKind'}
+        title="Type de rappel"
+        options={REMINDER_KINDS}
+        value={d.reminderKind}
+        onPick={(reminderKind) => set({ reminderKind })}
         onClose={() => setSheet(null)}
       />
       <OptionSheet

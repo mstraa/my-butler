@@ -4,18 +4,16 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/app-text';
+import { HOURS, MINUTES, pad, TimeGrid } from '@/components/form/time-grid';
 import { Sheet } from '@/components/sheet';
 import { getTracker, setSleepTime, setTrackerValue } from '@/db/tracking';
 import { useDbMutation, useDbQuery } from '@/db/use-query';
 import { mediumDayLabel } from '@/lib/dates';
 import { colors, fonts } from '@/theme/tokens';
 
-const HOURS = Array.from({ length: 24 }, (_, i) => i);
 // Sommeil : des heures plausibles d'abord, dans l'ordre de la nuit.
 const HOURS_WOKE = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
 const HOURS_SLEPT = [20, 21, 22, 23, 0, 1, 2, 3, 4, 5, 6, 7];
-const MINUTES = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
-const pad = (n: number) => String(n).padStart(2, '0');
 
 /**
  * Heure notée dans un suivi : type « heure » (ex. lever), ou coucher / lever d'un suivi « sommeil » (`field`).
@@ -47,8 +45,8 @@ export default function TrackerTimeSheet() {
               {pad(h)}:{pad(m)}
             </AppText>
           </View>
-          <Grid label="Heure" items={hours} value={h} onPick={setH} />
-          <Grid label="Minutes" items={MINUTES} value={m} onPick={setM} />
+          <TimeGrid label="Heure" items={hours} value={h} onPick={setH} />
+          <TimeGrid label="Minutes" items={MINUTES} value={m} onPick={setM} />
           <View style={{ flexDirection: 'row', gap: 10 }}>
             {value ? (
               <Pressable
@@ -82,39 +80,7 @@ export default function TrackerTimeSheet() {
   );
 }
 
-function Grid({ label, items, value, onPick }: { label: string; items: number[]; value: number; onPick: (v: number) => void }) {
-  return (
-    <View style={{ gap: 8 }}>
-      <AppText variant="overline" style={{ paddingHorizontal: 4 }}>
-        {label}
-      </AppText>
-      <View style={styles.grid} accessibilityRole="radiogroup">
-        {items.map((v) => {
-          const on = v === value;
-          return (
-            <Pressable
-              key={v}
-              onPress={() => {
-                Haptics.selectionAsync();
-                onPick(v);
-              }}
-              accessibilityRole="radio"
-              accessibilityState={{ checked: on }}
-              style={[styles.cell, on && { backgroundColor: colors.text }]}>
-              <AppText style={{ fontFamily: fonts.displayMedium, fontSize: 16 }} color={on ? colors.onLight : colors.text}>
-                {pad(v)}
-              </AppText>
-            </Pressable>
-          );
-        })}
-      </View>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   big: { fontFamily: fonts.displayThin, fontSize: 56, lineHeight: 60, letterSpacing: -1.5, color: colors.text },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  cell: { width: '15.2%', flexGrow: 1, height: 44, borderRadius: 14, backgroundColor: colors.row, alignItems: 'center', justifyContent: 'center' },
   btn: { flex: 1, height: 50, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
 });

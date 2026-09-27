@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:layout_width="match_parent"
+  android:layout_height="match_parent"
+  android:orientation="vertical"
+  android:paddingStart="24dp"
+  android:paddingEnd="24dp"
+  android:paddingTop="72dp"
+  android:paddingBottom="40dp">
+
+  <TextView
+    android:id="@+id/alarm_label"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:text="Alarme"
+    android:textAllCaps="true"
+    android:letterSpacing="0.12"
+    android:textColor="@color/alarm_text_tertiary"
+    android:textSize="12sp" />
+
+  <TextView
+    android:id="@+id/alarm_clock"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="8dp"
+    android:fontFamily="sans-serif-light"
+    android:textColor="@color/alarm_text"
+    android:textSize="88sp" />
+
+  <TextView
+    android:id="@+id/alarm_title"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="12dp"
+    android:fontFamily="sans-serif-medium"
+    android:textColor="@color/alarm_text"
+    android:textSize="28sp" />
+
+  <TextView
+    android:id="@+id/alarm_body"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="6dp"
+    android:textColor="@color/alarm_text_secondary"
+    android:textSize="16sp" />
+
+  <View
+    android:layout_width="match_parent"
+    android:layout_height="0dp"
+    android:layout_weight="1" />
+
+  <TextView
+    android:id="@+id/alarm_open"
+    android:layout_width="match_parent"
+    android:layout_height="48dp"
+    android:gravity="center"
+    android:text="Ouvrir dans l'app"
+    android:textColor="@color/alarm_text_secondary"
+    android:textSize="15sp" />
+
+  <TextView
+    android:id="@+id/alarm_snooze"
+    android:layout_width="match_parent"
+    android:layout_height="56dp"
+    android:layout_marginTop="8dp"
+    android:background="@drawable/alarm_btn_ghost"
+    android:gravity="center"
+    android:fontFamily="sans-serif-medium"
+    android:text="Répéter dans 10 min"
+    android:textColor="@color/alarm_text"
+    android:textSize="16sp" />
+
+  <TextView
+    android:id="@+id/alarm_stop"
+    android:layout_width="match_parent"
+    android:layout_height="64dp"
+    android:layout_marginTop="12dp"
+    android:background="@drawable/alarm_btn_primary"
+    android:gravity="center"
+    android:fontFamily="sans-serif-medium"
+    android:text="Arrêter"
+    android:textColor="@color/alarm_on_light"
+    android:textSize="18sp" />
+</LinearLayout>

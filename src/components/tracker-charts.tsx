@@ -73,14 +73,10 @@ function useGrow(target: number, delay: number) {
   return h;
 }
 
-function GoalLine({ goal, max, height, text, offset = 0 }: { goal: number | null; max: number; height: number; text: string; offset?: number }) {
+/** Repère de l'objectif : trait en pointillés seul (la valeur est dans la légende sous le graphique). */
+function GoalLine({ goal, max, height, offset = 0 }: { goal: number | null; max: number; height: number; offset?: number }) {
   if (!goal) return null;
-  return (
-    <View pointerEvents="none" style={[styles.goal, { bottom: (goal / max) * height + offset }]}>
-      <View style={styles.goalLine} />
-      <AppText style={styles.goalLabel}>{text}</AppText>
-    </View>
-  );
+  return <View pointerEvents="none" style={[styles.goal, styles.goalLine, { bottom: (goal / max) * height + offset }]} />;
 }
 
 /* ——— Durée : histogramme ——— */
@@ -93,7 +89,7 @@ function BarChart({ days, color, goal, unit, step, kind }: Props) {
       {days.map((d, i) => (
         <Bar key={d.day} ratio={(d.value ?? 0) / max} height={height} color={i === 6 ? color : withAlpha(color, 0.4)} delay={i * 40} />
       ))}
-      <GoalLine goal={goal} max={max} height={height} text={goal ? fmtShort({ kind, unit, step }, goal) : ''} />
+      <GoalLine goal={goal} max={max} height={height} />
     </View>
   );
 }
@@ -119,7 +115,7 @@ function TubeChart({ days, color, goal, kind, unit, step }: Props) {
       {days.map((d, i) => (
         <Tube key={d.day} ratio={(d.value ?? 0) / max} height={height} color={color} strong={i === 6} delay={i * 40} />
       ))}
-      <GoalLine goal={goal} max={max} height={height} text={goal ? fmtShort({ kind, unit, step }, goal) : ''} />
+      <GoalLine goal={goal} max={max} height={height} />
     </View>
   );
 }
@@ -159,7 +155,7 @@ function PopChart({ days, color, goal, kind, unit, step }: Props) {
         />
       ))}
       {/* Repère au niveau du centre des pastilles. */}
-      <GoalLine goal={goal} max={max} height={height - dot} offset={dot / 2} text={goal ? fmtShort({ kind, unit, step }, goal) : ''} />
+      <GoalLine goal={goal} max={max} height={height - dot} offset={dot / 2} />
     </View>
   );
 }

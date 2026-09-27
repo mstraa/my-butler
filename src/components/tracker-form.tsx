@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppText } from '@/components/app-text';
 import { showDialog } from '@/components/dialog';
+import { AlarmField, AlarmTimeSheet } from '@/components/form/alarm-field';
 import { Chip, FieldLabel, SwitchRow, TextField } from '@/components/form/fields';
 import { Icon, type IconName } from '@/components/icon';
 import { TrackerChart } from '@/components/tracker-charts';
@@ -15,7 +16,7 @@ import { GOAL_COLORS } from '@/db/agenda';
 import { syncHealth } from '@/db/health-sync';
 import { healthMetricOf, type TrackerDraft, type TrackerKind } from '@/db/tracking';
 import { shiftDay, todayKey } from '@/lib/dates';
-import { healthAvailable, healthSupported, requestHealthAccess } from '@/lib/health';
+import { healthAvailable, healthSupported, requestHealthAccess, requestHealthBackgroundAccess } from '@/lib/health';
 import { fmtDuration, fmtNum, fmtStep, isDuration, parseDraft } from '@/lib/tracker-format';
 import { categoryColors, colors, fonts, withAlpha } from '@/theme/tokens';
 
@@ -61,12 +62,12 @@ const HEALTH = healthSupported ? 'health' : null;
 
 /** Modèles pour démarrer vite (création seulement). */
 const TEMPLATES: (TrackerDraft & { label: string })[] = [
-  { label: 'Sommeil', name: 'Sommeil', kind: 'sleep', unit: 'h', step: 15, goal: 7 * 60, icon: 'moon', color: categoryColors.sport, source: HEALTH },
-  { label: 'Pas', name: 'Pas', kind: 'quantity', unit: 'pas', step: 1000, goal: 8000, icon: 'steps', color: categoryColors.health, source: HEALTH },
-  { label: 'Lever', name: 'Lever', kind: 'time', unit: '', step: 5, goal: null, icon: 'sun', color: categoryColors.groceries, source: null },
-  { label: 'Eau', name: 'Eau', kind: 'volume', unit: 'L', step: 0.25, goal: 1.5, icon: 'glass', color: categoryColors.work, source: null },
-  { label: 'E-liquide', name: 'E-liquide', kind: 'volume', unit: 'ml', step: 0.5, goal: null, icon: 'drop', color: categoryColors.work, source: null },
-  { label: 'Cafés', name: 'Cafés', kind: 'quantity', unit: 'cafés', step: 1, goal: null, icon: 'glass', color: categoryColors.friends, source: null },
+  { label: 'Sommeil', name: 'Sommeil', kind: 'sleep', unit: 'h', step: 15, goal: 7 * 60, icon: 'moon', color: categoryColors.sport, source: HEALTH, alarm: null },
+  { label: 'Pas', name: 'Pas', kind: 'quantity', unit: 'pas', step: 1000, goal: 8000, icon: 'steps', color: categoryColors.health, source: HEALTH, alarm: null },
+  { label: 'Lever', name: 'Lever', kind: 'time', unit: '', step: 5, goal: null, icon: 'sun', color: categoryColors.groceries, source: null, alarm: null },
+  { label: 'Eau', name: 'Eau', kind: 'volume', unit: 'L', step: 0.25, goal: 1.5, icon: 'glass', color: categoryColors.work, source: null, alarm: null },
+  { label: 'E-liquide', name: 'E-liquide', kind: 'volume', unit: 'ml', step: 0.5, goal: null, icon: 'drop', color: categoryColors.work, source: null, alarm: null },
+  { label: 'Cafés', name: 'Cafés', kind: 'quantity', unit: 'cafés', step: 1, goal: null, icon: 'glass', color: categoryColors.friends, source: null, alarm: null },
 ];
 
 const ICONS: IconName[] = ['pulse', 'task', 'moon', 'sun', 'drop', 'glass', 'flame', 'timer', 'clock', 'book', 'sport', 'steps', 'pill', 'fruit'];
@@ -98,6 +99,7 @@ export function TrackerForm({ title, initial, isNew, onSave, onDelete }: Props) 
   const [customUnit, setCustomUnit] = useState(initial.kind === 'quantity' && !UNITS.quantity.some((u) => u.value === initial.unit));
   const [showErrors, setShowErrors] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [pickingTime, setPickingTime] = useState(false);
   const set = (patch: Partial<TrackerDraft>) => setD((c) => ({ ...c, ...patch }));
   const color = d.color ?? COLORS[0];
 
@@ -114,7 +116,7 @@ export function TrackerForm({ title, initial, isNew, onSave, onDelete }: Props) 
     setStepText('');
   };
   const applyTemplate = (tpl: TrackerDraft) => {
-    setD({ ...tpl });
+    setD({ ...tpl, alarm: d.alarm });
     setStepText('');
     setGoalText(goalToText(tpl));
     setCustomUnit(false);
@@ -155,6 +157,8 @@ export function TrackerForm({ title, initial, isNew, onSave, onDelete }: Props) 
         );
         return;
       }
+      // Alarme d'un suivi relié : Health Connect est relu au moment de sonner, app fermée (accès en arrière-plan).
+      if (draft.alarm && draft.source === 'health' && !initial.alarm) await requestHealthBackgroundAccess();
       setSaving(true);
       try {
         await onSave(draft);
@@ -396,6 +400,15 @@ export function TrackerForm({ title, initial, isNew, onSave, onDelete }: Props) 
             </View>
           </Animated.View>
 
+          <Animated.View entering={FadeInDown.delay(100).duration(260)}>
+            <AlarmField
+              value={d.alarm}
+              onChange={(alarm) => set({ alarm })}
+              onPickTime={() => setPickingTime(true)}
+              hint={alarmHint(d)}
+            />
+          </Animated.View>
+
           {onDelete && (
             <Pressable
               onPress={() =>
@@ -421,8 +434,23 @@ export function TrackerForm({ title, initial, isNew, onSave, onDelete }: Props) 
           )}
         </ScrollView>
       </KeyboardAvoidingView>
+      {pickingTime && d.alarm && (
+        <AlarmTimeSheet value={d.alarm.time} onDone={(time) => set({ alarm: { ...d.alarm!, time } })} onClose={() => setPickingTime(false)} />
+      )}
     </SafeAreaView>
   );
+}
+
+/** Quand l'alarme se tait : déjà noté, ou (relié à Health Connect) déjà arrivé au moment de sonner. */
+function alarmHint(d: TrackerDraft) {
+  const metric = d.source === 'health' ? healthMetricOf(d) : null;
+  if (metric === 'steps') {
+    return d.goal
+      ? "Health Connect est relu au moment de sonner : pas d'alarme si l'objectif de pas est déjà atteint."
+      : "Sans objectif par jour, l'alarme sonne à chaque fois. Avec un objectif, elle se tait s'il est déjà atteint.";
+  }
+  if (metric === 'sleep') return "Health Connect est relu au moment de sonner : pas d'alarme si la nuit est déjà arrivée.";
+  return "Ne sonne pas si la valeur du jour est déjà notée.";
 }
 
 function goalToText(d: TrackerDraft) {

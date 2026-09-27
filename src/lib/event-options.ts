@@ -1,4 +1,5 @@
 import type { Recurrence } from '@/db/agenda';
+import type { ReminderKind } from '@/db/events';
 
 /** Choix proposés pour le rappel et la répétition d'un rendez-vous. */
 export const REMINDERS: { value: number | null; label: string }[] = [
@@ -10,6 +11,12 @@ export const REMINDERS: { value: number | null; label: string }[] = [
   { value: 60, label: '1 h avant' },
   { value: 120, label: '2 h avant' },
   { value: 1440, label: '1 jour avant' },
+];
+
+/** Forme du rappel d'un rendez-vous. */
+export const REMINDER_KINDS: { value: ReminderKind; label: string }[] = [
+  { value: 'notif', label: 'Notification' },
+  { value: 'alarm', label: 'Alarme (sonnerie, plein écran)' },
 ];
 
 /** Relance quotidienne d'une tâche en retard. */
