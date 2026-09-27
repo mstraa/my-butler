@@ -1,0 +1,24 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.alarmclock'
+version = '0.1.0'
+
+android {
+  namespace "expo.modules.alarmclock"
+  defaultConfig {
+    versionCode 1
+    versionName "0.1.0"
+  }
+  lintOptions {
+    abortOnError false
+  }
+}
+
+dependencies {
+  // Mêmes versions que react-native-health-connect : lecture des pas et du sommeil au moment de sonner.
+  implementation "androidx.health.connect:connect-client:1.1.0"
+  implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3"
+}

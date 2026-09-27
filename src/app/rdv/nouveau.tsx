@@ -43,6 +43,7 @@ export default function NewEventScreen() {
         allDay: source?.allDay ?? false,
         location: source?.location ?? '',
         reminderMin: source ? source.reminderMin : 15,
+        reminderKind: source?.reminderKind ?? 'notif',
         recurrence: 'none',
         deadline: null,
         notes: source?.notes ?? '',

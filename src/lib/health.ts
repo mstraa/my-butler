@@ -18,6 +18,10 @@ export async function requestHealthAccess(_metric: HealthMetric) {
   return false;
 }
 
+export async function requestHealthBackgroundAccess() {
+  return false;
+}
+
 export async function grantedHealthMetrics(): Promise<Set<HealthMetric>> {
   return new Set();
 }

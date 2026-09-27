@@ -3,6 +3,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import type { IconName } from '@/components/icon';
 import { GOAL_COLORS } from '@/db/agenda';
+import { alarmOf, type DailyAlarm } from '@/lib/alarm';
 import { type DayKey, dayKey, parseDay, shiftDay, shiftMonth, todayKey, weekDays } from '@/lib/dates';
 
 export type GoalPeriod = 'day' | 'week' | 'month';
@@ -17,6 +18,8 @@ export type GoalDraft = {
   unit: string;
   color: string | null;
   icon: IconName;
+  /** Alarme quotidienne (heure, jours) ; ne sonne pas si la période est déjà atteinte. */
+  alarm: DailyAlarm | null;
 };
 
 export type GoalProgress = GoalDraft & {
@@ -60,6 +63,7 @@ export const isDone = (kind: GoalKind, target: number, value: number) => value >
 type GoalRow = {
   id: number; key: string | null; title: string; period: GoalPeriod; kind: GoalKind; target: number | null;
   unit: string | null; color: string | null; icon: string | null; sort: number;
+  alarm_time: string | null; alarm_days: number | null;
 };
 
 const DEFAULT_ICON: Record<GoalKind, IconName> = { counter: 'target', value: 'target', duration: 'clock', bool: 'check' };
@@ -109,6 +113,7 @@ export async function listGoals(db: SQLiteDatabase, today: DayKey = todayKey()):
       unit: g.unit ?? '',
       color: g.color ?? GOAL_COLORS[i % GOAL_COLORS.length],
       icon: (g.icon as IconName) || DEFAULT_ICON[g.kind],
+      alarm: alarmOf(g.alarm_time, g.alarm_days),
       value,
       today: byDay.get(today) ?? 0,
       answered: byDay.has(today),
@@ -180,25 +185,28 @@ export async function getGoal(db: SQLiteDatabase, id: number): Promise<(GoalDraf
   if (!g) return null;
   return {
     id: g.id, title: g.title, period: g.period, kind: g.kind, target: g.target ?? 1, unit: g.unit ?? '',
-    color: g.color, icon: (g.icon as IconName) || DEFAULT_ICON[g.kind],
+    color: g.color, icon: (g.icon as IconName) || DEFAULT_ICON[g.kind], alarm: alarmOf(g.alarm_time, g.alarm_days),
   };
 }
 
 const cols = (d: GoalDraft) => [
   d.title.trim(), d.period, d.kind, d.kind === 'bool' ? 1 : d.target, d.unit.trim() || null, d.color, d.icon,
+  d.alarm?.time ?? null, d.alarm?.days ?? 127,
 ];
 
 export async function createGoal(db: SQLiteDatabase, d: GoalDraft) {
   const max = await db.getFirstAsync<{ m: number | null }>('SELECT MAX(sort) AS m FROM goals');
   await db.runAsync(
-    'INSERT INTO goals (title, period, kind, target, unit, color, icon, sort, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    `INSERT INTO goals (title, period, kind, target, unit, color, icon, alarm_time, alarm_days, sort, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ...cols(d), (max?.m ?? 0) + 1, todayKey(),
   );
 }
 
 export async function updateGoal(db: SQLiteDatabase, id: number, d: GoalDraft) {
   await db.runAsync(
-    'UPDATE goals SET title = ?, period = ?, kind = ?, target = ?, unit = ?, color = ?, icon = ? WHERE id = ?',
+    `UPDATE goals SET title = ?, period = ?, kind = ?, target = ?, unit = ?, color = ?, icon = ?, alarm_time = ?, alarm_days = ?
+      WHERE id = ?`,
     ...cols(d), id,
   );
 }

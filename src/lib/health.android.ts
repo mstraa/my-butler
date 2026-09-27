@@ -46,6 +46,20 @@ export async function requestHealthAccess(metric: HealthMetric) {
   }
 }
 
+/**
+ * Lecture en arrière-plan : l'alarme d'un suivi relié relit Health Connect au moment de sonner, app fermée.
+ * Sans cet accès, la lecture échoue et l'alarme sonne quand même.
+ */
+export async function requestHealthBackgroundAccess() {
+  if (!(await healthAvailable())) return false;
+  try {
+    const granted = await requestPermission([{ accessType: 'read', recordType: 'BackgroundAccessPermission' }]);
+    return granted.some((p) => p.recordType === 'BackgroundAccessPermission');
+  } catch {
+    return false;
+  }
+}
+
 export async function grantedHealthMetrics() {
   const out = new Set<HealthMetric>();
   if (!(await healthAvailable())) return out;

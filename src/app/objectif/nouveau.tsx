@@ -19,6 +19,7 @@ export default function NewGoalScreen() {
         unit: '',
         color: null,
         icon: 'target',
+        alarm: null,
       }}
       onSave={async (d) => {
         await mutate((db) => createGoal(db, d));

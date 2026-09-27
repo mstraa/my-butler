@@ -44,7 +44,9 @@ export default function EditEventScreen() {
       external={google}
       readOnlyNote={
         google
-          ? 'Importé de Google Agenda : titre, horaires et lieu se modifient dans Google Agenda. Catégorie, notes, rappel et échéance restent dans l\'app.'
+          ? `Importé de Google Agenda : titre, horaires et lieu se modifient dans Google Agenda. Catégorie, notes, rappel et échéance restent dans l'app.${
+              event.googleSeries ? ' Rendez-vous répété : le rappel (ou l\'alarme) vaut pour toutes les occurrences.' : ''
+            }`
           : event.recurrence !== 'none'
             ? 'Rendez-vous répété : les changements s\'appliquent à toutes les occurrences.'
             : undefined

@@ -229,6 +229,20 @@ const MIGRATIONS: string[] = [
   /* v12 — rendez-vous Google : lien de visio Google Meet */ `
   ALTER TABLE events ADD COLUMN meet_url TEXT;  -- lu dans la description de l'évènement Google, à chaque synchro
   `,
+  /* v13 — alarmes : type du rappel d'un rendez-vous, alarme quotidienne des objectifs et des suivis */ `
+  ALTER TABLE events ADD COLUMN reminder_kind TEXT NOT NULL DEFAULT 'notif'; -- 'notif' | 'alarm'
+  ALTER TABLE goals ADD COLUMN alarm_time TEXT;                               -- 'HH:mm' ; NULL = pas d'alarme
+  ALTER TABLE goals ADD COLUMN alarm_days INTEGER NOT NULL DEFAULT 127;       -- jours (bit 0 = lundi … bit 6 = dimanche)
+  ALTER TABLE trackers ADD COLUMN alarm_time TEXT;
+  ALTER TABLE trackers ADD COLUMN alarm_days INTEGER NOT NULL DEFAULT 127;
+  `,
+  /* v14 — rendez-vous Google répétés : le rappel (ou l'alarme) vaut pour toute la série */ `
+  CREATE TABLE google_series (
+    series_id TEXT PRIMARY KEY NOT NULL,  -- id de l'évènement répété dans l'agenda du téléphone
+    reminder_min INTEGER,                 -- NULL = pas de rappel
+    reminder_kind TEXT NOT NULL DEFAULT 'notif'
+  );
+  `,
 ];
 
 export async function migrateDbIfNeeded(db: SQLiteDatabase) {
