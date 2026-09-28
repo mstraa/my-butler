@@ -206,6 +206,7 @@ export async function seedTestData(db: SQLiteDatabase) {
     const reading = await tracker('Lecture', 'duration', 'min', 5, 30, 'book', categoryColors.health);
     const liquid = await tracker('E-liquide', 'volume', 'ml', 0.5, null, 'drop', categoryColors.work);
     const coffee = await tracker('Cafés', 'quantity', 'cafés', 1, 3, 'glass', categoryColors.friends);
+    const steps = await tracker('Pas', 'quantity', 'pas', 1000, 8000, 'steps', categoryColors.groceries);
     await db.runAsync('UPDATE trackers SET sort = id');
     for (let d = -60; d <= 0; d++) {
       const day = shiftDay(t, d);
@@ -222,6 +223,7 @@ export async function seedTestData(db: SQLiteDatabase) {
       if (r() < 0.7) await entry(reading, between(2, 12) * 5);
       await entry(liquid, between(4, 12) / 2);
       if (d < 0 || r() < 0.5) await entry(coffee, between(1, 5));
+      await entry(steps, between(8, 150) * 100);
     }
 
     /* Envies d'achat : en attente (dont plusieurs de plus de 30 jours), achetées, abandonnées. */

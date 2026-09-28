@@ -340,7 +340,7 @@ function TrackerCard({
       />
       {!!footer && (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          {t.goal && t.kind !== 'time' ? <View style={styles.dashKey} /> : null}
+          {t.goal && t.kind !== 'time' && t.kind !== 'sleep' ? <View style={styles.dashKey} /> : null}
           <AppText variant="caption" style={{ flex: 1 }}>
             {footer}
           </AppText>
