@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# Build local EAS (development ou preview), choix de l'appareil adb, installation et lancement.
+# Build local EAS (development, preview ou production), choix de l'appareil adb, installation et lancement.
 #
 #   npm run android:build                 # demande le profil et l'appareil
 #   npm run android:build -- preview      # profil imposé
+#   npm run android:build -- prod         # APK optimisé (~25 Mo, arm64 seul)
 #   npm run android:build -- dev --last   # réinstalle le dernier APK de ce profil, sans rebuild
 set -euo pipefail
 
@@ -20,6 +21,7 @@ for arg in "$@"; do
   case "$arg" in
     dev|development) PROFILE=development ;;
     preview) PROFILE=preview ;;
+    prod | production) PROFILE=production ;;
     --last) LAST=1 ;;
     *) echo "Argument inconnu : $arg"; exit 1 ;;
   esac
@@ -65,8 +67,10 @@ choose() {
 }
 
 if [[ -z "$PROFILE" ]]; then
-  choose "Profil" "development — dev client (com.mypersonallife.app.dev)" "preview — vraie app (com.mypersonallife.app)"
-  if ((CHOICE == 0)); then PROFILE=development; else PROFILE=preview; fi
+  choose "Profil" "development — dev client (com.mypersonallife.app.dev)" "preview — vraie app (com.mypersonallife.app)" \
+    "production — vraie app, APK optimisé (arm64, R8)"
+  PROFILES=(development preview production)
+  PROFILE="${PROFILES[CHOICE]}"
 fi
 
 if [[ "$PROFILE" == development ]]; then PACKAGE=com.mypersonallife.app.dev; else PACKAGE=com.mypersonallife.app; fi
