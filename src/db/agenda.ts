@@ -5,6 +5,7 @@ import type { IconName } from '@/components/icon';
 import { deleteTask } from '@/db/tasks';
 import { getDayTrackers, type TrackerKind } from '@/db/tracking';
 import { dayKey, dayOf, type DayKey, nowStamp, parseDay, shiftDay, type Stamp, timeOf } from '@/lib/dates';
+import { isActiveOn, repeatOf, type RepeatUnit } from '@/lib/goal-repeat';
 import { fmtClock, fmtValue } from '@/lib/tracker-format';
 import { categoryColors, colors } from '@/theme/tokens';
 
@@ -325,12 +326,12 @@ export type DayStats = {
 export async function getDayStats(db: SQLiteDatabase, day: DayKey): Promise<DayStats> {
   const [trackers, goals] = await Promise.all([
     getDayTrackers(db, day),
-    db.getAllAsync<{ key: string | null; kind: string; target: number | null; value: number | null }>(
-      `SELECT g.key, g.kind, g.target, ge.value
+    db.getAllAsync<{ key: string | null; kind: string; target: number | null; value: number | null } & RepeatCols>(
+      `SELECT g.key, g.kind, g.target, ge.value, ${REPEAT_COLS}
          FROM goals g LEFT JOIN goal_entries ge ON ge.goal_id = g.id AND ge.day = ?
         WHERE g.active = 1 AND g.period = 'day'`,
       day,
-    ),
+    ).then((rows) => rows.filter((g) => activeOn('day', g, day))),
   ]);
   const met = goals.filter((g) => isMet(g.kind, g.target, g.value)).length;
   const fruits = goals.find((g) => g.key === 'fruits');
@@ -351,14 +352,20 @@ export async function getDayStats(db: SQLiteDatabase, day: DayKey): Promise<DayS
   };
 }
 
+/* Période personnalisée : les objectifs en repos ce jour-là (ou cette semaine-là) ne comptent pas. */
+type RepeatCols = { repeat_every: number | null; repeat_days: number | null; repeat_from: string | null; created_at: string | null };
+const REPEAT_COLS = 'g.repeat_every, g.repeat_days, g.repeat_from, g.created_at';
+const activeOn = (unit: RepeatUnit, g: RepeatCols, day: DayKey) =>
+  isActiveOn(unit, repeatOf(g.repeat_every, g.repeat_days, g.repeat_from, g.created_at ?? day), day);
+
 const isMet = (kind: string, target: number | null, value: number | null) =>
   (value ?? 0) >= (kind === 'bool' ? 1 : target ?? 1);
 
 /** Part des objectifs quotidiens atteints, par jour (0 à 1). Les jours sans objectif valent 0. */
 export async function getGoalRatios(db: SQLiteDatabase, from: DayKey, to: DayKey): Promise<Map<DayKey, number>> {
   const [goals, entries] = await Promise.all([
-    db.getAllAsync<{ id: number; kind: string; target: number | null }>(
-      "SELECT id, kind, target FROM goals WHERE active = 1 AND period = 'day'",
+    db.getAllAsync<{ id: number; kind: string; target: number | null } & RepeatCols>(
+      `SELECT g.id, g.kind, g.target, ${REPEAT_COLS} FROM goals g WHERE g.active = 1 AND g.period = 'day'`,
     ),
     db.getAllAsync<{ goal_id: number; day: DayKey; value: number }>(
       'SELECT goal_id, day, value FROM goal_entries WHERE day BETWEEN ? AND ?', from, to,
@@ -370,9 +377,9 @@ export async function getGoalRatios(db: SQLiteDatabase, from: DayKey, to: DayKey
   const met = new Map<DayKey, number>();
   for (const e of entries) {
     const g = byId.get(e.goal_id);
-    if (g && isMet(g.kind, g.target, e.value)) met.set(e.day, (met.get(e.day) ?? 0) + 1);
+    if (g && activeOn('day', g, e.day) && isMet(g.kind, g.target, e.value)) met.set(e.day, (met.get(e.day) ?? 0) + 1);
   }
-  for (const [d, n] of met) out.set(d, n / goals.length);
+  for (const [d, n] of met) out.set(d, n / goals.filter((g) => activeOn('day', g, d)).length);
   return out;
 }
 
@@ -398,16 +405,21 @@ export const GOAL_COLORS = [
  */
 export async function getWeekGoals(db: SQLiteDatabase, from: DayKey, to: DayKey, today: DayKey): Promise<WeekGoal[]> {
   const [goals, entries] = await Promise.all([
-    db.getAllAsync<{ id: number; title: string; period: string; kind: string; target: number | null; unit: string | null; color: string | null }>(
-      "SELECT id, title, period, kind, target, unit, color FROM goals WHERE active = 1 AND period IN ('day', 'week') ORDER BY sort, id",
+    db.getAllAsync<{ id: number; title: string; period: string; kind: string; target: number | null; unit: string | null; color: string | null } & RepeatCols>(
+      `SELECT g.id, g.title, g.period, g.kind, g.target, g.unit, g.color, ${REPEAT_COLS}
+         FROM goals g WHERE g.active = 1 AND g.period IN ('day', 'week') ORDER BY g.sort, g.id`,
     ),
     db.getAllAsync<{ goal_id: number; day: DayKey; value: number }>(
       'SELECT goal_id, day, value FROM goal_entries WHERE day BETWEEN ? AND ?', from, to,
     ),
   ]);
-  return goals.map((g, i) => {
-    const mine = entries.filter((e) => e.goal_id === g.id);
+  const days = Array.from({ length: 7 }, (_, i) => shiftDay(from, i));
+  return goals.flatMap((g, i) => {
     const color = g.color ?? GOAL_COLORS[i % GOAL_COLORS.length];
+    // Jours (ou semaine) du rythme : un objectif en repos toute la semaine n'apparaît pas.
+    const on = g.period === 'week' ? (activeOn('week', g, from) ? days : []) : days.filter((d) => activeOn('day', g, d));
+    if (on.length === 0) return [];
+    const mine = entries.filter((e) => e.goal_id === g.id && on.includes(e.day));
     if (g.period === 'week') {
       const value = mine.reduce((s, e) => s + e.value, 0);
       const target = g.kind === 'bool' ? 1 : g.target ?? 1;
@@ -420,8 +432,8 @@ export async function getWeekGoals(db: SQLiteDatabase, from: DayKey, to: DayKey,
     }
     const met = mine.filter((e) => e.day <= today && isMet(g.kind, g.target, e.value)).length;
     return {
-      id: g.id, title: `${g.title} · chaque jour`, color,
-      valueText: String(met), targetText: '7 j', ratio: met / 7,
+      id: g.id, title: `${g.title} · ${on.length === 7 ? 'chaque jour' : `${on.length} j par semaine`}`, color,
+      valueText: String(met), targetText: `${on.length} j`, ratio: met / on.length,
     };
   });
 }

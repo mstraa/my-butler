@@ -14,11 +14,11 @@ import {
 } from '@/db/goals';
 import { useDbMutation, useDbQuery } from '@/db/use-query';
 import { type DayKey, parseDay, shiftDay, todayKey, weekDays, weekRangeLabel } from '@/lib/dates';
+import { repeatLabel } from '@/lib/goal-repeat';
 import { categoryColors, colors, fonts, withAlpha } from '@/theme/tokens';
 
 const STREAK = categoryColors.friends;
 const UNIT = { day: 'j', week: 'sem.', month: 'mois' } as const;
-const PER = { day: 'Chaque jour', week: 'Chaque semaine', month: 'Chaque mois' } as const;
 const DOT = 14;
 const GAP = 4;
 const ROW_LABELS = ['L', '', 'M', '', 'V', '', 'D'];
@@ -69,7 +69,7 @@ function Body({ g, onClose }: { g: GoalHistory; onClose: () => void }) {
             {g.title}
           </AppText>
           <AppText variant="caption" numberOfLines={1}>
-            {PER[g.period]}
+            {repeatLabel(g.period, g.repeat)}
             {target}
           </AppText>
         </View>

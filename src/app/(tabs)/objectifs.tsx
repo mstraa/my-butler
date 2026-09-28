@@ -16,7 +16,8 @@ import {
   addToGoalEntry, fmtGoal, type GoalPeriod, type GoalProgress, listGoals, setGoalEntry, startChrono, stopChrono,
 } from '@/db/goals';
 import { useDbMutation, useDbQuery } from '@/db/use-query';
-import { mediumDayLabel, parseDay, todayKey, weekRangeLabel } from '@/lib/dates';
+import { type DayKey, mediumDayLabel, parseDay, shiftDay, todayKey, weekRangeLabel } from '@/lib/dates';
+import { repeatLabel } from '@/lib/goal-repeat';
 import { categoryColors, colors, fonts, withAlpha } from '@/theme/tokens';
 
 type Tab = 'list' | GoalPeriod;
@@ -63,7 +64,10 @@ function ObjectifsBody({ bottomOffset }: { bottomOffset: number }) {
   const [tab, setTab] = useState<Tab>('list');
   const { data: goals } = useDbQuery((db) => listGoals(db, today), today, { cacheId: 'objectifs' });
 
-  const mine = (goals ?? []).filter((g) => tab === 'list' || g.period === tab);
+  // Objectifs en repos (période personnalisée) : à la fin, et hors du score.
+  const all = (goals ?? []).filter((g) => tab === 'list' || g.period === tab);
+  const mine = all.filter((g) => !g.off);
+  const resting = all.filter((g) => g.off);
   const doneN = mine.filter((g) => g.done).length;
   const subtitle =
     tab === 'week'
@@ -96,10 +100,10 @@ function ObjectifsBody({ bottomOffset }: { bottomOffset: number }) {
 
       <ScrollView contentContainerStyle={{ gap: 10, paddingHorizontal: 16, paddingBottom: bottom }} showsVerticalScrollIndicator={false}>
         {tab === 'list' ? (
-          goals && <GoalList goals={goals} />
+          goals && <GoalList goals={goals} today={today} />
         ) : (
           <>
-            {goals && mine.length === 0 && (
+            {goals && all.length === 0 && (
               <AppText variant="body" color={colors.textTertiary} style={{ textAlign: 'center', paddingVertical: 20 }}>
                 {tab === 'day' ? 'Aucun objectif du jour.' : tab === 'week' ? 'Aucun objectif de la semaine.' : 'Aucun objectif du mois.'}
               </AppText>
@@ -107,6 +111,11 @@ function ObjectifsBody({ bottomOffset }: { bottomOffset: number }) {
             {mine.map((g, i) => (
               <Animated.View key={`${tab}-${g.id}`} entering={FadeInDown.delay(Math.min(i, 6) * 30).duration(260)} layout={LinearTransition.duration(200)}>
                 <GoalCard g={g} today={today} />
+              </Animated.View>
+            ))}
+            {resting.map((g) => (
+              <Animated.View key={`${tab}-${g.id}`} entering={FadeIn.duration(260)} layout={LinearTransition.duration(200)}>
+                <RestCard g={g} today={today} />
               </Animated.View>
             ))}
           </>
@@ -141,7 +150,7 @@ function ObjectifsBody({ bottomOffset }: { bottomOffset: number }) {
 }
 
 /** Vue Liste : tous les objectifs en cours, par période ; toucher une ligne ouvre son historique. */
-function GoalList({ goals }: { goals: GoalProgress[] }) {
+function GoalList({ goals, today }: { goals: GoalProgress[]; today: DayKey }) {
   if (goals.length === 0) {
     return (
       <AppText variant="body" color={colors.textTertiary} style={{ textAlign: 'center', paddingVertical: 20 }}>
@@ -152,14 +161,15 @@ function GoalList({ goals }: { goals: GoalProgress[] }) {
   return (
     <>
       {SECTIONS.map((sec, si) => {
-        const list = goals.filter((g) => g.period === sec.period);
+        const list = goals.filter((g) => g.period === sec.period).sort((a, b) => Number(a.off) - Number(b.off));
         if (list.length === 0) return null;
+        const on = list.filter((g) => !g.off);
         return (
           <Animated.View key={sec.period} entering={FadeInDown.delay(30 + si * 30).duration(260)} style={styles.section}>
             <View style={styles.sectionHead}>
               <AppText variant="overline">{sec.title}</AppText>
               <AppText style={{ fontFamily: fonts.displayMedium, fontSize: 13 }} color={colors.textSecondary}>
-                {list.filter((g) => g.done).length} / {list.length}
+                {on.filter((g) => g.done).length} / {on.length}
               </AppText>
             </View>
             {list.map((g, i) => (
@@ -167,6 +177,7 @@ function GoalList({ goals }: { goals: GoalProgress[] }) {
                 key={g.id}
                 g={g}
                 first={i === 0}
+                today={today}
                 onPress={() => router.push({ pathname: '/objectif/historique/[id]', params: { id: String(g.id) } })}
               />
             ))}
@@ -177,13 +188,16 @@ function GoalList({ goals }: { goals: GoalProgress[] }) {
   );
 }
 
-function ListRow({ g, first, onPress }: { g: GoalProgress; first: boolean; onPress: () => void }) {
+function ListRow({ g, first, today, onPress }: { g: GoalProgress; first: boolean; today: DayKey; onPress: () => void }) {
   const left = g.target - g.value;
-  const value =
-    g.kind === 'bool'
+  const value = g.off
+    ? 'repos'
+    : g.kind === 'bool'
       ? g.done ? 'fait' : '—'
       : `${fmtGoal(g.value)} / ${fmtGoal(g.target)}${g.unit && g.kind !== 'counter' ? ` ${g.unit}` : ''}`;
-  const meta = g.done ? 'atteint' : g.kind === 'bool' ? 'pas encore' : `reste ${fmtGoal(left)}`;
+  const meta = g.off
+    ? `${repeatLabel(g.period, g.repeat)}${g.next ? ` · ${nextLabel(g, today)}` : ''}`
+    : g.done ? 'atteint' : g.kind === 'bool' ? 'pas encore' : `reste ${fmtGoal(left)}`;
   const long = STREAK_LONG[g.period][g.streak > 1 ? 1 : 0];
   return (
     <Pressable
@@ -199,7 +213,7 @@ function ListRow({ g, first, onPress }: { g: GoalProgress; first: boolean; onPre
           <AppText variant="bodyStrong" numberOfLines={1} style={{ flex: 1, fontSize: 15 }}>
             {g.title}
           </AppText>
-          <AppText style={{ fontFamily: fonts.displayMedium, fontSize: 15 }} color={g.done ? DONE : colors.text}>
+          <AppText style={{ fontFamily: fonts.displayMedium, fontSize: 15 }} color={g.off ? colors.textTertiary : g.done ? DONE : colors.text}>
             {value}
           </AppText>
         </View>
@@ -227,6 +241,46 @@ function ListRow({ g, first, onPress }: { g: GoalProgress; first: boolean; onPre
           <AppText style={{ fontFamily: fonts.bodyMedium, fontSize: 11 }} color={g.streak ? STREAK : colors.textMuted}>
             {' '}{STREAK_UNIT[g.period]}
           </AppText>
+        </AppText>
+      </View>
+    </Pressable>
+  );
+}
+
+/** « reprend demain », « reprend lun. 30 sept. », « reprend la sem. du 6 oct. », « reprend en novembre ». */
+function nextLabel(g: GoalProgress, today: DayKey) {
+  if (!g.next) return '';
+  if (g.period === 'day') return g.next === shiftDay(today, 1) ? 'reprend demain' : `reprend ${mediumDayLabel(g.next)}`;
+  if (g.period === 'week') return `reprend la semaine du ${weekRangeLabel(g.next)}`;
+  return `reprend en ${format(parseDay(g.next), 'MMMM', { locale: fr })}`;
+}
+
+/** Objectif en repos sur la période en cours (période personnalisée) : rien à saisir. */
+function RestCard({ g, today }: { g: GoalProgress; today: DayKey }) {
+  return (
+    <Pressable
+      onLongPress={() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        router.push({ pathname: '/objectif/modifier/[id]', params: { id: String(g.id) } });
+      }}
+      delayLongPress={400}
+      accessibilityHint="Appui long pour modifier l'objectif"
+      accessibilityLabel={`${g.title}, repos, ${nextLabel(g, today)}`}
+      style={[styles.card, styles.rest]}>
+      <View style={styles.cardHead}>
+        <View style={[styles.iconBox, { backgroundColor: colors.row }]}>
+          <Icon name={g.icon} size={16} color={colors.textTertiary} />
+        </View>
+        <View style={{ flex: 1, minWidth: 0, paddingLeft: 2 }}>
+          <AppText variant="bodyStrong" numberOfLines={1} style={{ fontSize: 15 }} color={colors.textSecondary}>
+            {g.title}
+          </AppText>
+          <AppText variant="caption" numberOfLines={1}>
+            {repeatLabel(g.period, g.repeat)} · {nextLabel(g, today)}
+          </AppText>
+        </View>
+        <AppText variant="label" color={colors.textTertiary}>
+          Repos
         </AppText>
       </View>
     </Pressable>
@@ -509,6 +563,7 @@ const styles = StyleSheet.create({
   streak: { height: 26, flexDirection: 'row', alignItems: 'center', gap: 3, paddingLeft: 7, paddingRight: 9, borderRadius: 999 },
   card: { gap: 12, padding: 14, backgroundColor: colors.surfaceRaised, borderWidth: 1, borderColor: colors.border, borderRadius: 22 },
   cardHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  rest: { backgroundColor: 'transparent', borderStyle: 'dashed', borderColor: colors.borderDashed },
   iconBox: { width: 28, height: 28, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
   donePill: {
     flexDirection: 'row',
