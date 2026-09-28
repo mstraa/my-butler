@@ -76,33 +76,92 @@ mkdir -p "$OUT_DIR"
 # --- Appareil ----------------------------------------------------------------
 list_devices() { adb devices | awk 'NR>1 && $2=="device" {print $1}'; }
 
+# Téléphones en débogage sans fil annoncés sur le réseau (mDNS, via dns-sd de macOS) : « numéro_de_série ip:port ».
+# Le port change à chaque activation du débogage sans fil, d'où la recherche plutôt qu'une saisie.
+discover_wireless() {
+  command -v dns-sd >/dev/null || return 0
+  local name host port ip serial
+  dns-sd -t 2 -B _adb-tls-connect._tcp 2>/dev/null | awk '$2=="Add"{print $NF}' | sort -u |
+    while read -r name; do
+      read -r host port < <(dns-sd -t 1 -L "$name" _adb-tls-connect._tcp local. 2>/dev/null |
+        sed -n 's/.*can be reached at \(.*\)\.:\([0-9]*\).*/\1 \2/p' | head -1) || continue
+      [[ -n "${port:-}" ]] || continue
+      ip="$(dns-sd -t 1 -G v4 "$host" 2>/dev/null | awk '$2=="Add"{print $(NF-1)}' | head -1)"
+      # Nom du service : adb-<numéro de série>-<suffixe>
+      serial="${name#adb-}"
+      echo "${serial%-*} ${ip:-$host}:$port"
+    done
+}
+
 pick_device() {
-  local ids labels d state model addr
+  local ids labels d state info model serial kind addr code connected
   while true; do
+    # Les connexions sans fil mortes (ancien port) restent « offline » : on les retire.
+    adb devices | awk 'NR>1 && $2=="offline" && $1 ~ /:/ {print $1}' | while read -r d; do
+      adb disconnect "$d" >/dev/null 2>&1 || true
+    done
+
     ids=()
     labels=()
+    connected=" "
     while read -r d state; do
+      connected+="$d "
       if [[ "$state" == device ]]; then
-        model="$(adb -s "$d" shell getprop ro.product.model 2>/dev/null | tr -d '\r')"
+        info="$(adb -s "$d" shell 'getprop ro.product.model; getprop ro.serialno' 2>/dev/null | tr -d '\r')"
+        model="$(echo "$info" | sed -n 1p)"
+        serial="$(echo "$info" | sed -n 2p)"
+        connected+="$serial "
+        case "$d" in
+          emulator-*) kind="émulateur" ;;
+          *:* | *._adb-tls-connect._tcp) kind="sans fil" ;;
+          *) kind="USB" ;;
+        esac
         ids+=("$d")
-        labels+=("$model  ($d)")
+        labels+=("$model — $kind")
       else
         ids+=("")
         labels+=("$d — $state")
       fi
     done < <(adb devices | awk 'NR>1 && NF>=2 {print $1, $2}')
-    ids+=(__refresh__ __connect__ __quit__)
-    labels+=("↻ Rafraîchir la liste" "+ Connecter en sans fil (IP:port)…" "✕ Quitter")
+
+    printf '\033[2mRecherche des téléphones en débogage sans fil…\033[0m' >/dev/tty
+    while read -r serial addr; do
+      # Déjà connecté (adb se reconnecte souvent tout seul aux téléphones appairés).
+      [[ -z "$addr" || "$connected" == *" $addr "* || "$connected" == *" $serial "* ]] && continue
+      ids+=("wifi:$addr")
+      labels+=("📶 Sans fil, à connecter  ($addr)")
+    done < <(discover_wireless)
+    printf '\r\033[2K' >/dev/tty
+
+    ids+=(__refresh__ __connect__ __pair__ __quit__)
+    labels+=("↻ Rafraîchir la liste" "+ Connecter en sans fil (IP:port)…" "🔑 Appairer avec un code (première fois)…" "✕ Quitter")
 
     choose "Appareil" "${labels[@]}"
     case "${ids[CHOICE]}" in
       __refresh__) ;;
       __connect__)
-        read -rp "IP:port (Options pour les développeurs › Débogage sans fil) : " addr </dev/tty
+        read -rp "IP:port (Débogage sans fil › « Adresse IP et port ») : " addr </dev/tty
         if [[ -n "$addr" ]]; then adb connect "$addr" || true; fi
+        ;;
+      __pair__)
+        echo "Sur le téléphone : Débogage sans fil › Associer l'appareil avec un code d'association."
+        read -rp "IP:port affichés sous le code : " addr </dev/tty
+        read -rp "Code à 6 chiffres : " code </dev/tty
+        if [[ -n "$addr" && -n "$code" ]]; then adb pair "$addr" "$code" || true; fi
         ;;
       __quit__) exit 1 ;;
       "") echo "Appareil inutilisable : autorise le débogage sur le téléphone, puis rafraîchis." ;;
+      wifi:*)
+        addr="${ids[CHOICE]#wifi:}"
+        if adb connect "$addr" | grep -q '^connected\|already connected'; then
+          sleep 1
+          if list_devices | grep -qx "$addr"; then
+            DEVICE="$addr"
+            break
+          fi
+        fi
+        echo "Connexion impossible à $addr : si c'est la première fois, appaire d'abord avec un code."
+        ;;
       *)
         DEVICE="${ids[CHOICE]}"
         break
@@ -135,8 +194,11 @@ fi
 # --- Installation ------------------------------------------------------------
 # Le port du débogage sans fil peut changer pendant le build : on revérifie.
 if ! list_devices | grep -qx "$DEVICE"; then
-  echo "$DEVICE n'est plus connecté."
-  pick_device
+  [[ "$DEVICE" == *:* ]] && adb connect "$DEVICE" >/dev/null 2>&1 && sleep 1 || true
+  if ! list_devices | grep -qx "$DEVICE"; then
+    echo "$DEVICE n'est plus connecté."
+    pick_device
+  fi
 fi
 
 echo "Installation sur $DEVICE…"
