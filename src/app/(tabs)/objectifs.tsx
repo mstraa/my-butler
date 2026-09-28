@@ -87,15 +87,26 @@ function ObjectifsBody({ bottomOffset }: { bottomOffset: number }) {
             Objectifs
           </AppText>
         </View>
-        {mine.length > 0 && (
-          <View style={{ alignItems: 'flex-end' }} accessibilityLabel={`${doneN} sur ${mine.length} atteints`}>
-            <AppText style={styles.score}>
-              {doneN}
-              <AppText style={styles.scoreOf}>/{mine.length}</AppText>
-            </AppText>
-            <AppText variant="caption">atteints</AppText>
-          </View>
-        )}
+        <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 12 }}>
+          {mine.length > 0 && (
+            <View style={{ alignItems: 'flex-end' }} accessibilityLabel={`${doneN} sur ${mine.length} atteints`}>
+              <AppText style={styles.score}>
+                {doneN}
+                <AppText style={styles.scoreOf}>/{mine.length}</AppText>
+              </AppText>
+              <AppText variant="caption">atteints</AppText>
+            </View>
+          )}
+          {(goals?.length ?? 0) > 1 && (
+            <Pressable
+              onPress={() => router.push('/objectif/ordre')}
+              accessibilityRole="button"
+              accessibilityLabel="Réorganiser les objectifs"
+              style={({ pressed }) => [styles.sortBtn, pressed && { backgroundColor: colors.row }]}>
+              <Icon name="sort" size={16} color={colors.textSecondary} />
+            </Pressable>
+          )}
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={{ gap: 10, paddingHorizontal: 16, paddingBottom: bottom }} showsVerticalScrollIndicator={false}>
@@ -553,6 +564,7 @@ function Bar({ ratio, color }: { ratio: number; color: string }) {
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 12, paddingBottom: 12 },
   score: { fontFamily: fonts.displayThin, fontSize: 34, lineHeight: 36, letterSpacing: -1, color: colors.text },
+  sortBtn: { width: 36, height: 36, marginBottom: 2, borderRadius: 18, borderWidth: 1, borderColor: colors.borderDashed, alignItems: 'center', justifyContent: 'center' },
   scoreOf: { fontFamily: fonts.displayThin, fontSize: 20, color: colors.textMuted },
   section: { paddingVertical: 6, paddingHorizontal: 14, backgroundColor: colors.surfaceRaised, borderWidth: 1, borderColor: colors.border, borderRadius: 22 },
   sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 8, paddingBottom: 4, paddingHorizontal: 2 },

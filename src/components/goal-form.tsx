@@ -9,13 +9,14 @@ import { AppText } from '@/components/app-text';
 import { showDialog } from '@/components/dialog';
 import { AlarmField, AlarmTimeSheet } from '@/components/form/alarm-field';
 import { Chip, FieldLabel, TextField } from '@/components/form/fields';
+import { IconColorPicker } from '@/components/form/icon-color-picker';
 import { RepeatField } from '@/components/form/repeat-field';
-import { Icon, type IconName } from '@/components/icon';
+import { Icon } from '@/components/icon';
 import { GOAL_COLORS } from '@/db/agenda';
 import type { GoalDraft, GoalKind, GoalPeriod } from '@/db/goals';
 import { todayKey } from '@/lib/dates';
 import { EVERY_PERIOD, isCustomRepeat, periodStartOf } from '@/lib/goal-repeat';
-import { categoryColors, colors, fonts, withAlpha } from '@/theme/tokens';
+import { colors, fonts } from '@/theme/tokens';
 
 const PERIODS: { value: GoalPeriod; label: string }[] = [
   { value: 'day', label: 'Chaque jour' },
@@ -28,8 +29,6 @@ const KINDS: { value: GoalKind; label: string; hint: string }[] = [
   { value: 'duration', label: 'Durée', hint: 'Des minutes, avec chrono' },
   { value: 'bool', label: 'Oui / non', hint: 'Fait ou pas' },
 ];
-const ICONS: IconName[] = ['target', 'fruit', 'steps', 'book', 'sport', 'pill', 'drop', 'moon', 'heart', 'health', 'note', 'clock'];
-const COLORS = [...GOAL_COLORS, categoryColors.personal];
 
 type Props = {
   title: string;
@@ -53,7 +52,7 @@ export function GoalForm({ title, initial, onSave, onArchive, onDelete }: Props)
   const target = Number(targetText.replace(',', '.'));
   const titleError = !d.title.trim() ? "Donne un nom à l'objectif." : null;
   const targetError = d.kind !== 'bool' && !(target > 0) ? 'Indique une cible supérieure à 0.' : null;
-  const color = d.color ?? COLORS[0];
+  const color = d.color ?? GOAL_COLORS[0];
 
   const save = async () => {
     if (titleError || targetError) {
@@ -191,39 +190,7 @@ export function GoalForm({ title, initial, onSave, onArchive, onDelete }: Props)
           )}
 
           <Animated.View entering={FadeInDown.delay(60).duration(260)} style={{ gap: 8 }}>
-            <FieldLabel>Icône et couleur</FieldLabel>
-            <View style={styles.icons}>
-              {ICONS.map((ic) => {
-                const on = d.icon === ic;
-                return (
-                  <Pressable
-                    key={ic}
-                    onPress={() => set({ icon: ic })}
-                    accessibilityRole="radio"
-                    accessibilityLabel={`Icône ${ic}`}
-                    accessibilityState={{ checked: on }}
-                    style={[styles.iconChoice, { backgroundColor: on ? withAlpha(color, 0.18) : colors.surface }, on && { borderColor: color }]}>
-                    <Icon name={ic} size={18} color={on ? color : colors.textSecondary} />
-                  </Pressable>
-                );
-              })}
-            </View>
-            <View style={styles.colors}>
-              {COLORS.map((c) => {
-                const on = color === c;
-                return (
-                  <Pressable
-                    key={c}
-                    onPress={() => set({ color: c })}
-                    accessibilityRole="radio"
-                    accessibilityLabel={`Couleur ${c}`}
-                    accessibilityState={{ checked: on }}
-                    style={[styles.swatchRing, on && { borderColor: c }]}>
-                    <View style={[styles.swatch, { backgroundColor: c }]} />
-                  </Pressable>
-                );
-              })}
-            </View>
+            <IconColorPicker icon={d.icon} color={color} onIcon={(icon) => set({ icon })} onColor={(c) => set({ color: c })} />
           </Animated.View>
 
           <Animated.View entering={FadeInDown.delay(80).duration(260)}>
@@ -323,11 +290,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   kindOn: { borderColor: colors.text, backgroundColor: colors.row },
-  icons: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  iconChoice: { width: 44, height: 44, borderRadius: 14, borderWidth: 1, borderColor: 'transparent', alignItems: 'center', justifyContent: 'center' },
-  colors: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  swatchRing: { width: 40, height: 40, borderRadius: 20, borderWidth: 2, borderColor: 'transparent', alignItems: 'center', justifyContent: 'center' },
-  swatch: { width: 28, height: 28, borderRadius: 14 },
   ghostBtn: {
     flex: 1,
     height: 48,

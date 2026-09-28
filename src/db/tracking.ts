@@ -256,3 +256,10 @@ export async function getDayTrackers(db: SQLiteDatabase, day: DayKey) {
     woke: r.woke_at,
   }));
 }
+
+/** Nouvel ordre d'affichage des suivis (ids dans l'ordre voulu). */
+export async function reorderTrackers(db: SQLiteDatabase, ids: number[]) {
+  await db.withTransactionAsync(async () => {
+    for (const [i, id] of ids.entries()) await db.runAsync('UPDATE trackers SET sort = ? WHERE id = ?', i, id);
+  });
+}

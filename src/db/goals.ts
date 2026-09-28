@@ -347,3 +347,15 @@ export async function setPeriodValue(
   });
 }
 
+
+/**
+ * Nouvel ordre d'affichage des objectifs (dans l'ordre voulu). Un objectif sans couleur choisie
+ * prend celle de son rang : on fige la couleur affichée pour qu'elle ne change pas avec l'ordre.
+ */
+export async function reorderGoals(db: SQLiteDatabase, goals: { id: number; color: string }[]) {
+  await db.withTransactionAsync(async () => {
+    for (const [i, g] of goals.entries()) {
+      await db.runAsync('UPDATE goals SET sort = ?, color = COALESCE(color, ?) WHERE id = ?', i, g.color, g.id);
+    }
+  });
+}
