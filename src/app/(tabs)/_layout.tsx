@@ -3,7 +3,7 @@ import { TabList, Tabs, TabSlot, TabTrigger } from 'expo-router/ui';
 import { useEffect } from 'react';
 
 import { FloatingTabBar, TabIconButton } from '@/components/tab-bar';
-import { lockExpenses } from '@/lib/expense-lock';
+import { setExpensesInView } from '@/lib/expense-lock';
 
 const TAB_PATHS = new Set(['/', '/objectifs', '/suivi', '/envies']);
 
@@ -12,10 +12,11 @@ const TAB_PATHS = new Set(['/', '/objectifs', '/suivi', '/envies']);
  * La TabList cachée déclare les routes ; les boutons visibles sont dans FloatingTabBar.
  */
 export default function TabsLayout() {
-  // Passer à un autre onglet referme le verrou des Dépenses.
+  // Passer à un autre onglet referme le verrou des Dépenses (après le délai de grâce).
   const pathname = usePathname();
   useEffect(() => {
-    if (TAB_PATHS.has(pathname)) lockExpenses();
+    if (pathname === '/depenses') setExpensesInView(true);
+    else if (TAB_PATHS.has(pathname)) setExpensesInView(false);
   }, [pathname]);
 
   return (

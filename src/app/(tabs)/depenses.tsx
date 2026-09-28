@@ -1,7 +1,7 @@
 import * as Haptics from 'expo-haptics';
 import { router, useFocusEffect, useNavigation } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { BackHandler, Pressable, StyleSheet, View } from 'react-native';
+import { AppState, BackHandler, Pressable, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { Easing, Keyframe, useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
@@ -17,7 +17,7 @@ import { frequencyLabel } from '@/db/recurring-expenses';
 import { useDbQuery } from '@/db/use-query';
 import { dayOf, mediumDayLabel, todayKey } from '@/lib/dates';
 import { monthLabel } from '@/lib/expense-format';
-import { unlockExpenses, useExpensesUnlocked } from '@/lib/expense-lock';
+import { lockExpenses, unlockExpenses, useExpensesUnlocked } from '@/lib/expense-lock';
 import { setExpenseView, useExpenseView } from '@/lib/expense-view';
 import { categoryColors, colors, fonts, withAlpha } from '@/theme/tokens';
 
@@ -38,11 +38,14 @@ const AIR = 16; // marge en plus en haut quand la feuille est fermée
 
 export default function DepensesScreen() {
   const unlocked = useExpensesUnlocked();
-  // Demande l'empreinte à chaque arrivée sur l'onglet tant qu'il est verrouillé.
+  // Demande l'empreinte à chaque arrivée sur l'onglet (ou retour dans l'app) tant qu'il est verrouillé ;
+  // pas après le cadenas, qui doit laisser l'écran fermé.
   useFocusEffect(
     useCallback(() => {
-      if (!unlocked) unlockExpenses();
-    }, [unlocked]),
+      unlockExpenses();
+      const sub = AppState.addEventListener('change', (s) => s === 'active' && unlockExpenses());
+      return () => sub.remove();
+    }, []),
   );
   return unlocked ? <Expenses /> : <Locked />;
 }
@@ -169,17 +172,30 @@ function Expenses() {
               <AppText variant="display" accessibilityRole="header">
                 Dépenses
               </AppText>
-              <Pressable
-                onPress={() => router.push('/depense/mois')}
-                accessibilityRole="button"
-                accessibilityLabel={`Mois : ${monthLabel(month)}`}
-                style={({ pressed }) => [styles.monthPill, pressed && { backgroundColor: colors.row }]}>
-                <AppText style={{ fontFamily: fonts.bodySemiBold, fontSize: 13 }}>
-                  {monthLabel(month)}
-                  {month.slice(0, 4) !== current.slice(0, 4) ? ` ${month.slice(0, 4)}` : ''}
-                </AppText>
-                <Icon name="chevronDown" size={14} strokeWidth={2} />
-              </Pressable>
+              <View style={styles.headerRight}>
+                <Pressable
+                  onPress={() => router.push('/depense/mois')}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Mois : ${monthLabel(month)}`}
+                  style={({ pressed }) => [styles.monthPill, pressed && { backgroundColor: colors.row }]}>
+                  <AppText style={{ fontFamily: fonts.bodySemiBold, fontSize: 13 }}>
+                    {monthLabel(month)}
+                    {month.slice(0, 4) !== current.slice(0, 4) ? ` ${month.slice(0, 4)}` : ''}
+                  </AppText>
+                  <Icon name="chevronDown" size={14} strokeWidth={2} />
+                </Pressable>
+                <Pressable
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    lockExpenses();
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Verrouiller les dépenses"
+                  hitSlop={8}
+                  style={({ pressed }) => [styles.lockBtn, pressed && { backgroundColor: colors.row }]}>
+                  <Icon name="lock" size={16} strokeWidth={2} />
+                </Pressable>
+              </View>
             </View>
 
             <Animated.View
@@ -456,9 +472,9 @@ const styles = StyleSheet.create({
   },
   unlockBtn: { height: 44, marginTop: 8, paddingHorizontal: 22, borderRadius: 999, backgroundColor: colors.text, justifyContent: 'center' },
   header: { height: 64, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20 },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 6, marginRight: 44 },
   monthPill: {
     height: 36,
-    marginRight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
@@ -467,6 +483,7 @@ const styles = StyleSheet.create({
     borderColor: colors.borderDashed,
     borderRadius: 999,
   },
+  lockBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   fan: { position: 'absolute', right: -58, top: 96, width: 120, height: 168 },
   fanCard: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 20, transformOrigin: '50% 100%' },
   summary: { gap: 14, paddingTop: 18, paddingHorizontal: 20, paddingBottom: 22 },
