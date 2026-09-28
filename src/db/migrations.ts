@@ -258,6 +258,11 @@ const MIGRATIONS: string[] = [
   ALTER TABLE expenses ADD COLUMN recurring_id INTEGER REFERENCES recurring_expenses(id);
   CREATE UNIQUE INDEX expenses_recurring ON expenses(recurring_id, spent_at) WHERE recurring_id IS NOT NULL;
   `,
+  /* v16 — objectifs : période personnalisée (certains jours de la semaine, une période sur N) */ `
+  ALTER TABLE goals ADD COLUMN repeat_every INTEGER NOT NULL DEFAULT 1;  -- une période sur N (1 = toutes)
+  ALTER TABLE goals ADD COLUMN repeat_days INTEGER NOT NULL DEFAULT 127; -- objectif du jour : jours de la semaine (bit 0 = lundi)
+  ALTER TABLE goals ADD COLUMN repeat_from TEXT;                         -- 'YYYY-MM-DD' : période de départ du « une sur N »
+  `,
 ];
 
 export async function migrateDbIfNeeded(db: SQLiteDatabase) {

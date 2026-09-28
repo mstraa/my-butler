@@ -2,6 +2,8 @@ import { useLocalSearchParams } from 'expo-router';
 
 import { GoalForm } from '@/components/goal-form';
 import { createGoal, type GoalPeriod } from '@/db/goals';
+import { todayKey } from '@/lib/dates';
+import { EVERY_PERIOD } from '@/lib/goal-repeat';
 import { useDbMutation } from '@/db/use-query';
 
 export default function NewGoalScreen() {
@@ -20,6 +22,7 @@ export default function NewGoalScreen() {
         color: null,
         icon: 'target',
         alarm: null,
+        repeat: EVERY_PERIOD(todayKey()),
       }}
       onSave={async (d) => {
         await mutate((db) => createGoal(db, d));

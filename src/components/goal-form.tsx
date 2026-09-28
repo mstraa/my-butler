@@ -9,9 +9,12 @@ import { AppText } from '@/components/app-text';
 import { showDialog } from '@/components/dialog';
 import { AlarmField, AlarmTimeSheet } from '@/components/form/alarm-field';
 import { Chip, FieldLabel, TextField } from '@/components/form/fields';
+import { RepeatField } from '@/components/form/repeat-field';
 import { Icon, type IconName } from '@/components/icon';
 import { GOAL_COLORS } from '@/db/agenda';
 import type { GoalDraft, GoalKind, GoalPeriod } from '@/db/goals';
+import { todayKey } from '@/lib/dates';
+import { EVERY_PERIOD, isCustomRepeat, periodStartOf } from '@/lib/goal-repeat';
 import { categoryColors, colors, fonts, withAlpha } from '@/theme/tokens';
 
 const PERIODS: { value: GoalPeriod; label: string }[] = [
@@ -44,6 +47,7 @@ export function GoalForm({ title, initial, onSave, onArchive, onDelete }: Props)
   const [showErrors, setShowErrors] = useState(false);
   const [saving, setSaving] = useState(false);
   const [pickingTime, setPickingTime] = useState(false);
+  const [custom, setCustom] = useState(isCustomRepeat(initial.repeat));
   const set = (patch: Partial<GoalDraft>) => setD((c) => ({ ...c, ...patch }));
 
   const target = Number(targetText.replace(',', '.'));
@@ -106,10 +110,33 @@ export function GoalForm({ title, initial, onSave, onArchive, onDelete }: Props)
             <FieldLabel>Période</FieldLabel>
             <View style={styles.chips}>
               {PERIODS.map((p) => (
-                <Chip key={p.value} label={p.label} selected={d.period === p.value} onPress={() => set({ period: p.value })} />
+                <Chip
+                  key={p.value}
+                  label={p.label}
+                  selected={!custom && d.period === p.value}
+                  onPress={() => {
+                    setCustom(false);
+                    set({ period: p.value, repeat: EVERY_PERIOD(periodStartOf(p.value, todayKey())) });
+                  }}
+                />
               ))}
+              <Chip
+                label="Personnalisée"
+                selected={custom}
+                onPress={() => {
+                  if (custom) return;
+                  setCustom(true);
+                  // Point de départ : en semaine pour un objectif du jour, une fois sur 2 sinon.
+                  const from = periodStartOf(d.period, todayKey());
+                  set({ repeat: d.period === 'day' ? { every: 1, days: 0b0011111, from } : { every: 2, days: 127, from } });
+                }}
+              />
             </View>
           </Animated.View>
+
+          {custom && (
+            <RepeatField unit={d.period} value={d.repeat} onChange={(period, repeat) => set({ period, repeat })} />
+          )}
 
           <Animated.View entering={FadeInDown.delay(40).duration(260)} style={{ gap: 8 }}>
             <FieldLabel>Type</FieldLabel>
@@ -205,9 +232,10 @@ export function GoalForm({ title, initial, onSave, onArchive, onDelete }: Props)
               onChange={(alarm) => set({ alarm })}
               onPickTime={() => setPickingTime(true)}
               hint={
-                d.period === 'day'
+                (d.period === 'day'
                   ? "Ne sonne pas si l'objectif du jour est déjà atteint."
-                  : `Ne sonne plus une fois l'objectif ${d.period === 'week' ? 'de la semaine' : 'du mois'} atteint.`
+                  : `Ne sonne plus une fois l'objectif ${d.period === 'week' ? 'de la semaine' : 'du mois'} atteint.`) +
+                (custom ? ' Ni pendant les périodes de repos.' : '')
               }
             />
           </Animated.View>

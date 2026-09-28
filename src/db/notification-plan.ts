@@ -11,6 +11,7 @@ import type { AlarmHealthCheck } from '../../modules/alarm-clock';
 import type { DayPayload } from '../../modules/day-notification';
 import { alarmOnDay } from '@/lib/alarm';
 import { dayKey, dayOf, type DayKey, parseDay, parseStamp, shiftDay, type Stamp, stamp, timeOf } from '@/lib/dates';
+import { isActiveOn } from '@/lib/goal-repeat';
 
 /*
  * Plan des notifications locales, calculé depuis la base (sans rien planifier : voir lib/notifications).
@@ -267,6 +268,8 @@ async function planDailyAlarms(db: SQLiteDatabase, today: DayKey, push: (n: Plan
     for (let i = 0; i <= EVENT_DAYS; i++) {
       const day = shiftDay(today, i);
       if (!alarmOnDay(g.alarm.days, day)) continue;
+      // Période de repos (période personnalisée) : pas d'alarme.
+      if (!isActiveOn(g.period, g.repeat, day)) continue;
       // Période en cours déjà atteinte (ou oui/non déjà répondu aujourd'hui) : rien jusqu'à la suivante.
       if (day <= periodEnd && (g.done || (g.kind === 'bool' && day === today && g.answered))) continue;
       const progress = day <= periodEnd && g.kind !== 'bool' ? ` · ${fmtGoal(g.value)} / ${fmtGoal(g.target)} pour l'instant` : '';

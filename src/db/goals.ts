@@ -5,6 +5,7 @@ import type { IconName } from '@/components/icon';
 import { GOAL_COLORS } from '@/db/agenda';
 import { alarmOf, type DailyAlarm } from '@/lib/alarm';
 import { type DayKey, dayKey, parseDay, shiftDay, shiftMonth, todayKey, weekDays } from '@/lib/dates';
+import { type GoalRepeat, isActiveOn, nextActive, repeatOf } from '@/lib/goal-repeat';
 
 export type GoalPeriod = 'day' | 'week' | 'month';
 export type GoalKind = 'counter' | 'value' | 'duration' | 'bool';
@@ -20,6 +21,8 @@ export type GoalDraft = {
   icon: IconName;
   /** Alarme quotidienne (heure, jours) ; ne sonne pas si la période est déjà atteinte. */
   alarm: DailyAlarm | null;
+  /** Période personnalisée : certains jours, une période sur N. */
+  repeat: GoalRepeat;
 };
 
 export type GoalProgress = GoalDraft & {
@@ -39,6 +42,10 @@ export type GoalProgress = GoalDraft & {
   history: ('met' | 'miss' | 'now')[];
   /** Chrono lancé (objectif « durée ») : instant de départ en ms, sinon null. */
   chronoSince: number | null;
+  /** Période en cours hors rythme (repos) : rien à faire. */
+  off: boolean;
+  /** Début de la prochaine période active après la période en cours. */
+  next: DayKey | null;
 };
 
 /** Premier et dernier jour de la période qui contient `day`. */
@@ -64,7 +71,10 @@ type GoalRow = {
   id: number; key: string | null; title: string; period: GoalPeriod; kind: GoalKind; target: number | null;
   unit: string | null; color: string | null; icon: string | null; sort: number;
   alarm_time: string | null; alarm_days: number | null;
+  repeat_every: number | null; repeat_days: number | null; repeat_from: string | null; created_at: string | null;
 };
+
+const repeatOfRow = (g: GoalRow) => repeatOf(g.repeat_every, g.repeat_days, g.repeat_from, g.created_at ?? todayKey());
 
 const DEFAULT_ICON: Record<GoalKind, IconName> = { counter: 'target', value: 'target', duration: 'clock', bool: 'check' };
 
@@ -93,12 +103,19 @@ export async function listGoals(db: SQLiteDatabase, today: DayKey = todayKey()):
       return sum;
     };
     const met = (k: number) => isDone(g.kind, target, k === 0 ? value : sumBack(k));
+    // Seules les périodes du rythme comptent : les périodes de repos sont sautées.
+    const repeat = repeatOfRow(g);
+    const max = g.period === 'day' ? 400 : g.period === 'week' ? 60 : 24;
+    const actives: number[] = [];
+    for (let k = 0; k <= max; k++) if (isActiveOn(g.period, repeat, periodStartBack(g.period, today, k))) actives.push(k);
+    const off = actives[0] !== 0;
     // La période en cours compte si elle est atteinte ; sinon la série part de la précédente.
     let streak = 0;
-    const max = g.period === 'day' ? 400 : g.period === 'week' ? 60 : 24;
-    for (let k = met(0) ? 0 : 1; k <= max && met(k); k++) streak += 1;
-    const history = Array.from({ length: 7 }, (_, j) => {
-      const k = 6 - j;
+    for (const k of actives) {
+      if (met(k)) streak += 1;
+      else if (k !== 0) break;
+    }
+    const history = actives.slice(0, 7).reverse().map((k) => {
       if (k === 0) return value && isDone(g.kind, target, value) ? 'met' : 'now';
       return met(k) ? 'met' : 'miss';
     }) as GoalProgress['history'];
@@ -114,6 +131,7 @@ export async function listGoals(db: SQLiteDatabase, today: DayKey = todayKey()):
       color: g.color ?? GOAL_COLORS[i % GOAL_COLORS.length],
       icon: (g.icon as IconName) || DEFAULT_ICON[g.kind],
       alarm: alarmOf(g.alarm_time, g.alarm_days),
+      repeat,
       value,
       today: byDay.get(today) ?? 0,
       answered: byDay.has(today),
@@ -121,6 +139,8 @@ export async function listGoals(db: SQLiteDatabase, today: DayKey = todayKey()):
       streak,
       history,
       chronoSince: chrono ? Number(chrono.value) : null,
+      off,
+      next: nextActive(g.period, repeat, periodStartBack(g.period, today, -1))[0] ?? null,
     };
   });
 }
@@ -186,26 +206,31 @@ export async function getGoal(db: SQLiteDatabase, id: number): Promise<(GoalDraf
   return {
     id: g.id, title: g.title, period: g.period, kind: g.kind, target: g.target ?? 1, unit: g.unit ?? '',
     color: g.color, icon: (g.icon as IconName) || DEFAULT_ICON[g.kind], alarm: alarmOf(g.alarm_time, g.alarm_days),
+    repeat: repeatOfRow(g),
   };
 }
 
 const cols = (d: GoalDraft) => [
   d.title.trim(), d.period, d.kind, d.kind === 'bool' ? 1 : d.target, d.unit.trim() || null, d.color, d.icon,
   d.alarm?.time ?? null, d.alarm?.days ?? 127,
+  // Le rythme ne vaut que pour son unité : les jours de la semaine, seulement pour un objectif du jour.
+  d.repeat.every, d.period === 'day' ? d.repeat.days : 127, d.repeat.from,
 ];
 
 export async function createGoal(db: SQLiteDatabase, d: GoalDraft) {
   const max = await db.getFirstAsync<{ m: number | null }>('SELECT MAX(sort) AS m FROM goals');
   await db.runAsync(
-    `INSERT INTO goals (title, period, kind, target, unit, color, icon, alarm_time, alarm_days, sort, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO goals (title, period, kind, target, unit, color, icon, alarm_time, alarm_days,
+       repeat_every, repeat_days, repeat_from, sort, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ...cols(d), (max?.m ?? 0) + 1, todayKey(),
   );
 }
 
 export async function updateGoal(db: SQLiteDatabase, id: number, d: GoalDraft) {
   await db.runAsync(
-    `UPDATE goals SET title = ?, period = ?, kind = ?, target = ?, unit = ?, color = ?, icon = ?, alarm_time = ?, alarm_days = ?
+    `UPDATE goals SET title = ?, period = ?, kind = ?, target = ?, unit = ?, color = ?, icon = ?, alarm_time = ?, alarm_days = ?,
+       repeat_every = ?, repeat_days = ?, repeat_from = ?
       WHERE id = ?`,
     ...cols(d), id,
   );
@@ -267,10 +292,12 @@ export async function getGoalHistory(db: SQLiteDatabase, id: number, today: DayK
   const entries = await db.getAllAsync<{ day: DayKey; value: number }>(
     'SELECT day, value FROM goal_entries WHERE goal_id = ? AND day BETWEEN ? AND ?', id, periodRange(g.period, since)[0], today,
   );
+  // Seules les périodes du rythme : les jours de repos restent vides dans le graphe.
   const periods: HistoryPeriod[] = [];
   for (let k = 0; ; k++) {
     const [start, end] = periodRange(g.period, periodStartBack(g.period, today, k));
     if (end < since) break;
+    if (!isActiveOn(g.period, g.repeat, start)) continue;
     const value = entries.filter((e) => e.day >= start && e.day <= end).reduce((sum, e) => sum + e.value, 0);
     periods.push({ start, end, value, met: isDone(g.kind, g.target, value), current: k === 0 });
   }
