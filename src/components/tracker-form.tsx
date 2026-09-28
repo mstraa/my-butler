@@ -10,6 +10,7 @@ import { AppText } from '@/components/app-text';
 import { showDialog } from '@/components/dialog';
 import { AlarmField, AlarmTimeSheet } from '@/components/form/alarm-field';
 import { Chip, FieldLabel, SwitchRow, TextField } from '@/components/form/fields';
+import { IconColorPicker } from '@/components/form/icon-color-picker';
 import { Icon, type IconName } from '@/components/icon';
 import { TrackerChart } from '@/components/tracker-charts';
 import { GOAL_COLORS } from '@/db/agenda';
@@ -67,11 +68,9 @@ const TEMPLATES: (TrackerDraft & { label: string })[] = [
   { label: 'Lever', name: 'Lever', kind: 'time', unit: '', step: 5, goal: null, icon: 'sun', color: categoryColors.groceries, source: null, alarm: null },
   { label: 'Eau', name: 'Eau', kind: 'volume', unit: 'L', step: 0.25, goal: 1.5, icon: 'glass', color: categoryColors.work, source: null, alarm: null },
   { label: 'E-liquide', name: 'E-liquide', kind: 'volume', unit: 'ml', step: 0.5, goal: null, icon: 'drop', color: categoryColors.work, source: null, alarm: null },
-  { label: 'Cafés', name: 'Cafés', kind: 'quantity', unit: 'cafés', step: 1, goal: null, icon: 'glass', color: categoryColors.friends, source: null, alarm: null },
+  { label: 'Cafés', name: 'Cafés', kind: 'quantity', unit: 'cafés', step: 1, goal: null, icon: 'coffee', color: categoryColors.friends, source: null, alarm: null },
 ];
 
-const ICONS: IconName[] = ['pulse', 'task', 'moon', 'sun', 'drop', 'glass', 'flame', 'timer', 'clock', 'book', 'sport', 'steps', 'pill', 'fruit'];
-const COLORS = [...GOAL_COLORS, categoryColors.personal];
 
 /** Données d'exemple pour l'aperçu du graphique. */
 const SAMPLE: Record<TrackerKind, number[]> = {
@@ -101,7 +100,7 @@ export function TrackerForm({ title, initial, isNew, onSave, onDelete }: Props) 
   const [saving, setSaving] = useState(false);
   const [pickingTime, setPickingTime] = useState(false);
   const set = (patch: Partial<TrackerDraft>) => setD((c) => ({ ...c, ...patch }));
-  const color = d.color ?? COLORS[0];
+  const color = d.color ?? GOAL_COLORS[0];
 
   const pickKind = (kind: TrackerKind) => {
     if (kind === d.kind) return;
@@ -365,39 +364,7 @@ export function TrackerForm({ title, initial, isNew, onSave, onDelete }: Props) 
           </Animated.View>
 
           <Animated.View entering={FadeInDown.delay(80).duration(260)} style={{ gap: 8 }}>
-            <FieldLabel>Icône et couleur</FieldLabel>
-            <View style={styles.icons}>
-              {ICONS.map((ic) => {
-                const on = d.icon === ic;
-                return (
-                  <Pressable
-                    key={ic}
-                    onPress={() => set({ icon: ic })}
-                    accessibilityRole="radio"
-                    accessibilityLabel={`Icône ${ic}`}
-                    accessibilityState={{ checked: on }}
-                    style={[styles.iconChoice, { backgroundColor: on ? withAlpha(color, 0.18) : colors.surface }, on && { borderColor: color }]}>
-                    <Icon name={ic} size={18} color={on ? color : colors.textSecondary} />
-                  </Pressable>
-                );
-              })}
-            </View>
-            <View style={styles.colors}>
-              {COLORS.map((c) => {
-                const on = color === c;
-                return (
-                  <Pressable
-                    key={c}
-                    onPress={() => set({ color: c })}
-                    accessibilityRole="radio"
-                    accessibilityLabel={`Couleur ${c}`}
-                    accessibilityState={{ checked: on }}
-                    style={[styles.swatchRing, on && { borderColor: c }]}>
-                    <View style={[styles.swatch, { backgroundColor: c }]} />
-                  </Pressable>
-                );
-              })}
-            </View>
+            <IconColorPicker icon={d.icon} color={color} onIcon={(icon) => set({ icon })} onColor={(c) => set({ color: c })} />
           </Animated.View>
 
           <Animated.View entering={FadeInDown.delay(100).duration(260)}>
@@ -497,11 +464,6 @@ const styles = StyleSheet.create({
   kindOn: { borderColor: colors.text, backgroundColor: colors.row },
   preview: { gap: 14, padding: 16, backgroundColor: colors.surfaceRaised, borderWidth: 1, borderColor: colors.border, borderRadius: 24 },
   iconBox: { width: 28, height: 28, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
-  icons: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  iconChoice: { width: 44, height: 44, borderRadius: 14, borderWidth: 1, borderColor: 'transparent', alignItems: 'center', justifyContent: 'center' },
-  colors: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  swatchRing: { width: 40, height: 40, borderRadius: 20, borderWidth: 2, borderColor: 'transparent', alignItems: 'center', justifyContent: 'center' },
-  swatch: { width: 28, height: 28, borderRadius: 14 },
   ghostBtn: {
     height: 48,
     marginTop: 6,

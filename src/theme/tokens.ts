@@ -46,6 +46,24 @@ export const categoryColors = {
   personal: '#B8B8BE', // Perso — neutre
 } as const;
 
+/** Couleurs proposées pour les objectifs et les suivis (reprend celles des catégories). */
+export const pickerColors: [string, string][] = [
+  ['#FF6B6B', 'rouge'],
+  [categoryColors.friends, 'orange'],
+  ['#FFB78A', 'pêche'],
+  [categoryColors.groceries, 'jaune'],
+  ['#C6E85A', 'citron vert'],
+  [categoryColors.health, 'vert'],
+  ['#3DDBB0', 'menthe'],
+  [categoryColors.work, 'cyan'],
+  ['#8CC8FF', 'bleu ciel'],
+  ['#5B8CFF', 'bleu'],
+  [categoryColors.sport, 'violet'],
+  ['#E48CFF', 'lilas'],
+  [categoryColors.family, 'rose'],
+  [categoryColors.personal, 'gris'],
+];
+
 /** Ajoute une opacité hexadécimale à une couleur #RRGGBB (ex. withAlpha(c, 0.13)). */
 export function withAlpha(hex: string, alpha: number) {
   const a = Math.round(Math.max(0, Math.min(1, alpha)) * 255)

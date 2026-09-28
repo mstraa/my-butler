@@ -50,6 +50,15 @@ export default function SuiviScreen() {
           </AppText>
         </View>
         <View style={{ flexDirection: 'row', gap: 8 }}>
+          {(trackers?.length ?? 0) > 1 && (
+            <Pressable
+              onPress={() => router.push('/suivi/ordre')}
+              accessibilityRole="button"
+              accessibilityLabel="Réorganiser les suivis"
+              style={({ pressed }) => [styles.addBtn, pressed && { backgroundColor: colors.row }]}>
+              <Icon name="sort" size={16} color={colors.textSecondary} />
+            </Pressable>
+          )}
           <Pressable
             onPress={() => router.push('/suivi/jour')}
             accessibilityRole="button"

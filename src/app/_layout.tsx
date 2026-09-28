@@ -98,6 +98,7 @@ export default function RootLayout() {
               options={{ presentation: 'transparentModal', animation: 'none', contentStyle: { backgroundColor: 'transparent' } }}
             />
             <Stack.Screen name="suivi/nouveau" options={{ animation: 'slide_from_bottom' }} />
+            <Stack.Screen name="suivi/ordre" options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="suivi/modifier/[id]" options={{ animation: 'slide_from_bottom' }} />
             <Stack.Screen name="envie/nouvelle" options={{ animation: 'slide_from_bottom' }} />
             <Stack.Screen name="envie/partage" options={{ animation: 'fade' }} />
@@ -107,6 +108,7 @@ export default function RootLayout() {
               options={{ presentation: 'transparentModal', animation: 'none', contentStyle: { backgroundColor: 'transparent' } }}
             />
             <Stack.Screen name="objectif/nouveau" options={{ animation: 'slide_from_bottom' }} />
+            <Stack.Screen name="objectif/ordre" options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="objectif/modifier/[id]" options={{ animation: 'slide_from_bottom' }} />
             <Stack.Screen
               name="objectif/historique/[id]"
