@@ -201,7 +201,7 @@ if ! list_devices | grep -qx "$DEVICE"; then
   fi
 fi
 
-echo "Installation sur $DEVICE…"
+echo "Installation sur ${DEVICE}…"
 adb -s "$DEVICE" install -r "$APK"
 adb -s "$DEVICE" shell monkey -p "$PACKAGE" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
 echo "✅ $PACKAGE installé et lancé sur $DEVICE"
