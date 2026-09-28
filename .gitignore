@@ -49,3 +49,6 @@ example
 # Sorties Gradle des modules natifs locaux
 modules/*/android/build/
 modules/*/android/.gradle/
+
+# APK locaux (scripts/android.sh)
+build/
