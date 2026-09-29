@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useFabTone } from '@/components/fab-tone';
 import { Icon, type IconName } from '@/components/icon';
+import { getMealDay } from '@/lib/meal-view';
 import { getSelectedDay } from '@/lib/selected-day';
 import { colors } from '@/theme/tokens';
 
@@ -65,6 +66,8 @@ export function FloatingTabBar({ children }: { children: React.ReactNode }) {
         onPress={() => {
           // Onglet Dépenses : le + ouvre directement la saisie d'une dépense.
           if (pathname === '/depenses') return router.push('/depense/nouvelle');
+          // Onglet Repas : ajout d'un aliment au jour affiché (le repas suit l'heure).
+          if (pathname === '/repas') return router.push({ pathname: '/repas/ajouter', params: { day: getMealDay() } });
           // Sur l'agenda (Jour / Mois), on ajoute au jour choisi.
           const day = pathname === '/' ? getSelectedDay() : null;
           router.push(day ? { pathname: '/ajouter', params: { day } } : '/ajouter');
@@ -99,7 +102,7 @@ const styles = StyleSheet.create({
   },
   pill: {
     flexDirection: 'row',
-    gap: 4,
+    gap: 2,
     padding: 6,
     backgroundColor: colors.pill,
     borderWidth: 1,
@@ -107,7 +110,8 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     ...shadow,
   },
-  tab: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  // 6 onglets : 44 de large pour tenir avec le + sur un écran de 390 dp.
+  tab: { width: 44, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
   tabActive: { backgroundColor: colors.text },
   fab: {
     width: 60,
