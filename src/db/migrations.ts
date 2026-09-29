@@ -263,6 +263,46 @@ const MIGRATIONS: string[] = [
   ALTER TABLE goals ADD COLUMN repeat_days INTEGER NOT NULL DEFAULT 127; -- objectif du jour : jours de la semaine (bit 0 = lundi)
   ALTER TABLE goals ADD COLUMN repeat_from TEXT;                         -- 'YYYY-MM-DD' : période de départ du « une sur N »
   `,
+  /* v17 — repas de la semaine : catalogue d'aliments, repas planifiés, liste de courses */ `
+  CREATE TABLE foods (
+    id INTEGER PRIMARY KEY NOT NULL,
+    name TEXT NOT NULL,
+    portion_label TEXT,                -- ce qu'est une portion : '80 g', '1 pot'
+    container_label TEXT,              -- ce qu'on achète : 'sachet 1 kg', 'pack de 4'
+    portions_per_container REAL,       -- portions dans un contenant ; NULL = compté en portions
+    kcal REAL,                         -- macros d'une portion
+    protein REAL,
+    carbs REAL,
+    fat REAL,
+    archived INTEGER NOT NULL DEFAULT 0, -- supprimé mais encore présent dans d'anciens repas
+    created_at TEXT NOT NULL
+  );
+
+  CREATE TABLE meal_items (
+    id INTEGER PRIMARY KEY NOT NULL,
+    day TEXT NOT NULL,                 -- 'YYYY-MM-DD'
+    meal TEXT NOT NULL,                -- 'breakfast' | 'lunch' | 'snack' | 'dinner'
+    food_id INTEGER NOT NULL REFERENCES foods(id),
+    portions REAL NOT NULL DEFAULT 1,
+    sort INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX meal_items_day ON meal_items(day, meal);
+
+  -- Repas marqué manqué ou pris à l'extérieur (sans ligne : prévu)
+  CREATE TABLE meal_status (
+    day TEXT NOT NULL,
+    meal TEXT NOT NULL,
+    status TEXT NOT NULL,              -- 'missed' | 'out'
+    PRIMARY KEY (day, meal)
+  );
+
+  -- Articles cochés dans la liste de courses d'une semaine
+  CREATE TABLE shopping_checks (
+    week TEXT NOT NULL,                -- lundi de la semaine 'YYYY-MM-DD'
+    food_id INTEGER NOT NULL REFERENCES foods(id),
+    PRIMARY KEY (week, food_id)
+  );
+  `,
 ];
 
 export async function migrateDbIfNeeded(db: SQLiteDatabase) {

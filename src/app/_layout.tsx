@@ -114,6 +114,23 @@ export default function RootLayout() {
               name="objectif/historique/[id]"
               options={{ presentation: 'transparentModal', animation: 'none', contentStyle: { backgroundColor: 'transparent' } }}
             />
+            <Stack.Screen name="repas/ajouter" options={{ animation: 'slide_from_bottom' }} />
+            <Stack.Screen name="repas/courses" options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="repas/aliments" options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="repas/aliment/nouveau" options={{ animation: 'slide_from_bottom' }} />
+            <Stack.Screen name="repas/aliment/[id]" options={{ animation: 'slide_from_bottom' }} />
+            <Stack.Screen
+              name="repas/portion/[id]"
+              options={{ presentation: 'transparentModal', animation: 'none', contentStyle: { backgroundColor: 'transparent' } }}
+            />
+            <Stack.Screen
+              name="repas/actions"
+              options={{ presentation: 'transparentModal', animation: 'none', contentStyle: { backgroundColor: 'transparent' } }}
+            />
+            <Stack.Screen
+              name="repas/copier"
+              options={{ presentation: 'transparentModal', animation: 'none', contentStyle: { backgroundColor: 'transparent' } }}
+            />
             <Stack.Screen name="anniversaires/index" options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="anniversaires/[id]" options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="anniversaires/nouveau" options={{ animation: 'slide_from_bottom' }} />

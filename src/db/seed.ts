@@ -163,6 +163,7 @@ export async function clearAllData(db: SQLiteDatabase) {
       DELETE FROM goal_entries; DELETE FROM goals; DELETE FROM sleep_log; DELETE FROM eliquid_log;
       DELETE FROM tracker_entries; DELETE FROM trackers;
       DELETE FROM wishes; DELETE FROM budgets; DELETE FROM day_notes; DELETE FROM google_series;
+      DELETE FROM shopping_checks; DELETE FROM meal_status; DELETE FROM meal_items; DELETE FROM foods;
       DELETE FROM settings WHERE key = 'demo_data' OR key LIKE 'chrono:%';
     `);
   });

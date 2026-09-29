@@ -5,10 +5,10 @@ import { useEffect } from 'react';
 import { FloatingTabBar, TabIconButton } from '@/components/tab-bar';
 import { setExpensesInView } from '@/lib/expense-lock';
 
-const TAB_PATHS = new Set(['/', '/objectifs', '/suivi', '/envies']);
+const TAB_PATHS = new Set(['/', '/objectifs', '/suivi', '/repas', '/envies']);
 
 /**
- * Barre du bas en pilule (Agenda, Objectifs, Suivi, Envies, Dépenses) + bouton « + ».
+ * Barre du bas en pilule (Agenda, Objectifs, Suivi, Repas, Envies, Dépenses) + bouton « + ».
  * La TabList cachée déclare les routes ; les boutons visibles sont dans FloatingTabBar.
  */
 export default function TabsLayout() {
@@ -32,6 +32,9 @@ export default function TabsLayout() {
         <TabTrigger name="suivi" asChild>
           <TabIconButton icon="pulse" label="Suivi" />
         </TabTrigger>
+        <TabTrigger name="repas" asChild>
+          <TabIconButton icon="meal" label="Repas" />
+        </TabTrigger>
         <TabTrigger name="envies" asChild>
           <TabIconButton icon="heart" label="Envies" />
         </TabTrigger>
@@ -43,6 +46,7 @@ export default function TabsLayout() {
         <TabTrigger name="agenda" href="/" />
         <TabTrigger name="objectifs" href="/objectifs" />
         <TabTrigger name="suivi" href="/suivi" />
+        <TabTrigger name="repas" href="/repas" />
         <TabTrigger name="envies" href="/envies" />
         <TabTrigger name="depenses" href="/depenses" />
       </TabList>
