@@ -26,13 +26,9 @@ export default function GoalOrderScreen() {
   const { data: goals } = useDbQuery((db) => listGoals(db, today), today, { cacheId: 'objectifs' });
 
   // L'ordre est global : on remet bout à bout les trois périodes, celle qui change comprise.
-  // Dans une période, les objectifs en repos vont à la fin (comme dans les onglets) : chaque groupe se range à part.
-  const inPeriod = (period: GoalPeriod) => (goals ?? []).filter((g) => g.period === period);
-  const save = (period: GoalPeriod, rest: boolean, ids: number[]) => {
+  const save = (period: GoalPeriod, ids: number[]) => {
     const byId = new Map((goals ?? []).map((g) => [g.id, g]));
-    const others = inPeriod(period).filter((g) => g.off !== rest).map((g) => g.id);
-    const ofPeriod = rest ? [...others, ...ids] : [...ids, ...others];
-    const all = SECTIONS.flatMap((s) => (s.period === period ? ofPeriod : inPeriod(s.period).map((g) => g.id)));
+    const all = SECTIONS.flatMap((s) => (s.period === period ? ids : (goals ?? []).filter((g) => g.period === s.period).map((g) => g.id)));
     mutate((db) => reorderGoals(db, all.map((id) => ({ id, color: byId.get(id)!.color }))));
   };
 
@@ -49,24 +45,14 @@ export default function GoalOrderScreen() {
           </AppText>
         )}
         {SECTIONS.map((s) => {
-          const list = inPeriod(s.period);
+          const list = (goals ?? []).filter((g) => g.period === s.period);
           if (list.length === 0) return null;
-          const active = list.filter((g) => !g.off);
-          const resting = list.filter((g) => g.off);
           return (
             <View key={s.period} style={{ gap: 8 }}>
               <AppText variant="overline" style={{ paddingHorizontal: 4 }}>
                 {s.title}
               </AppText>
-              {active.length > 0 && <ReorderList items={active.map(toItem)} onReorder={(ids) => save(s.period, false, ids)} />}
-              {resting.length > 0 && (
-                <>
-                  <AppText variant="caption" style={{ paddingHorizontal: 4 }}>
-                    En repos en ce moment
-                  </AppText>
-                  <ReorderList items={resting.map(toItem)} onReorder={(ids) => save(s.period, true, ids)} />
-                </>
-              )}
+              <ReorderList items={list.map(toItem)} onReorder={(ids) => save(s.period, ids)} />
             </View>
           );
         })}

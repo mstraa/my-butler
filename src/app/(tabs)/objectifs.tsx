@@ -64,10 +64,9 @@ function ObjectifsBody({ bottomOffset }: { bottomOffset: number }) {
   const [tab, setTab] = useState<Tab>('list');
   const { data: goals } = useDbQuery((db) => listGoals(db, today), today, { cacheId: 'objectifs' });
 
-  // Objectifs en repos (période personnalisée) : à la fin, et hors du score.
+  // Tous dans l'ordre choisi ; ceux en repos (période personnalisée) restent hors du score.
   const all = (goals ?? []).filter((g) => tab === 'list' || g.period === tab);
   const mine = all.filter((g) => !g.off);
-  const resting = all.filter((g) => g.off);
   const doneN = mine.filter((g) => g.done).length;
   const subtitle =
     tab === 'week'
@@ -119,14 +118,9 @@ function ObjectifsBody({ bottomOffset }: { bottomOffset: number }) {
                 {tab === 'day' ? 'Aucun objectif du jour.' : tab === 'week' ? 'Aucun objectif de la semaine.' : 'Aucun objectif du mois.'}
               </AppText>
             )}
-            {mine.map((g, i) => (
+            {all.map((g, i) => (
               <Animated.View key={`${tab}-${g.id}`} entering={FadeInDown.delay(Math.min(i, 6) * 30).duration(260)} layout={LinearTransition.duration(200)}>
-                <GoalCard g={g} today={today} />
-              </Animated.View>
-            ))}
-            {resting.map((g) => (
-              <Animated.View key={`${tab}-${g.id}`} entering={FadeIn.duration(260)} layout={LinearTransition.duration(200)}>
-                <RestCard g={g} today={today} />
+                {g.off ? <RestCard g={g} today={today} /> : <GoalCard g={g} today={today} />}
               </Animated.View>
             ))}
           </>
@@ -172,7 +166,7 @@ function GoalList({ goals, today }: { goals: GoalProgress[]; today: DayKey }) {
   return (
     <>
       {SECTIONS.map((sec, si) => {
-        const list = goals.filter((g) => g.period === sec.period).sort((a, b) => Number(a.off) - Number(b.off));
+        const list = goals.filter((g) => g.period === sec.period);
         if (list.length === 0) return null;
         const on = list.filter((g) => !g.off);
         return (
