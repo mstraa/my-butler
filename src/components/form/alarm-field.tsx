@@ -77,15 +77,23 @@ export function AlarmField({
   );
 }
 
-export function AlarmTimeSheet({ value, onDone, onClose }: { value: string; onDone: (t: string) => void; onClose: () => void }) {
+/** Feuille d'heure (grilles heures / minutes) : alarme par défaut, `title` pour un autre usage (début, fin d'un rdv). */
+export function AlarmTimeSheet({
+  value, onDone, onClose, title = "Heure de l'alarme",
+}: {
+  value: string;
+  onDone: (t: string) => void;
+  onClose: () => void;
+  title?: string;
+}) {
   const [h, setH] = useState(Number(value.slice(0, 2)));
   const [m, setM] = useState((Math.round(Number(value.slice(3, 5)) / 5) * 5) % 60);
   return (
-    <Sheet inline onClosed={onClose} label="Heure de l'alarme">
+    <Sheet inline onClosed={onClose} label={title}>
       {(close) => (
         <>
           <View style={{ paddingHorizontal: 4 }}>
-            <AppText variant="caption">Heure de l&apos;alarme</AppText>
+            <AppText variant="caption">{title}</AppText>
             <AppText style={styles.big}>
               {pad(h)}:{pad(m)}
             </AppText>
