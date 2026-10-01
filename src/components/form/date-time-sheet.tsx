@@ -27,6 +27,8 @@ type Props = {
   value: DateTimeValue;
   /** Journée entière : pas de réglette. */
   allDay?: boolean;
+  /** Choix du jour seul : le créneau reste affiché en tête, sans réglette (l'heure se règle ailleurs). */
+  dateOnly?: boolean;
   /** Libellé de la réglette unique (quand `value.end` est null). */
   timeLabel?: string;
   onDone: (v: DateTimeValue) => void;
@@ -91,7 +93,7 @@ function buildMonths(selected: DayKey): Month[] {
   return out;
 }
 
-function SheetBody({ title, value, allDay, timeLabel = 'Heure', onDone, close }: Props & { close: CloseSheet }) {
+function SheetBody({ title, value, allDay, dateOnly, timeLabel = 'Heure', onDone, close }: Props & { close: CloseSheet }) {
   const today = todayKey();
   const [day, setDay] = useState(value.day);
   const [start, setStart] = useState(toMin(value.start));
@@ -177,7 +179,7 @@ function SheetBody({ title, value, allDay, timeLabel = 'Heure', onDone, close }:
           renderItem={({ item }) => <MonthBlock month={item} selected={day} today={today} onPick={pick} />}
         />
 
-        {!allDay && (
+        {!allDay && !dateOnly && (
           <View style={styles.sliders}>
             {end !== null && (
               <View style={styles.durations}>
