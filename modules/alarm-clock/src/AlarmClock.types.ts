@@ -12,3 +12,6 @@ export type AlarmSpec = {
   link: string;
   health?: AlarmHealthCheck;
 };
+
+/** Une sonnerie d'alarme du téléphone (voir AlarmSound.kt). */
+export type AlarmSound = { uri: string; title: string };

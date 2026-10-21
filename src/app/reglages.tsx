@@ -4,8 +4,9 @@ import { useState } from 'react';
 import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/app-text';
+import { AlarmSoundSheet } from '@/components/alarm-sound-sheet';
 import { showDialog } from '@/components/dialog';
-import { Chip, SwitchRow } from '@/components/form/fields';
+import { Chip, PickerField, SwitchRow } from '@/components/form/fields';
 import { GoogleCalendarSettings } from '@/components/google-calendar-settings';
 import { Icon } from '@/components/icon';
 import { BackHeader, Screen } from '@/components/screen';
@@ -14,7 +15,7 @@ import { clearAllData } from '@/db/seed';
 import { seedTestData } from '@/db/test-data';
 import { invalidate, useDbMutation, useDbQuery } from '@/db/use-query';
 import {
-  alarmsFullScreenAllowed, nativeAlarms, notificationsAllowed, openAlarmFullScreenSettings, setupNotifications, testAlarm,
+  alarmSound, alarmsFullScreenAllowed, nativeAlarms, notificationsAllowed, openAlarmFullScreenSettings, setupNotifications, testAlarm,
   testNotification,
 } from '@/lib/notifications';
 import { colors, fonts } from '@/theme/tokens';
@@ -32,7 +33,7 @@ export default function SettingsScreen() {
       getNotifSettings(db),
       notificationsAllowed(),
     ]);
-    return { categories, demo: demo?.value === '1', notif, allowed, fullScreen: alarmsFullScreenAllowed() };
+    return { categories, demo: demo?.value === '1', notif, allowed, fullScreen: alarmsFullScreenAllowed(), sound: alarmSound() };
   });
 
   const setNotif = <K extends keyof NotifSettings>(key: K, value: NotifSettings[K]) => {
@@ -56,6 +57,7 @@ export default function SettingsScreen() {
     );
 
   const [loading, setLoading] = useState(false);
+  const [pickingSound, setPickingSound] = useState(false);
   const confirmTestData = () =>
     showDialog(
       'Charger des données de test ?',
@@ -119,6 +121,16 @@ export default function SettingsScreen() {
                     ? 'Sonnerie du réveil en boucle, même en silencieux, et plein écran. Se règlent sur chaque rendez-vous (type de rappel), objectif et suivi.'
                     : 'Dans cette version de l\'app, les alarmes arrivent comme de simples notifications.'}
                 </AppText>
+                {nativeAlarms && (
+                  <View style={{ flexDirection: 'row' }}>
+                    <PickerField
+                      label="Sonnerie"
+                      chevron
+                      value={data.sound ? data.sound.title || 'Sonnerie choisie' : 'Celle du réveil du téléphone'}
+                      onPress={() => setPickingSound(true)}
+                    />
+                  </View>
+                )}
                 {!data.fullScreen && (
                   <Pressable
                     onPress={() => {
@@ -226,6 +238,15 @@ export default function SettingsScreen() {
           </Section>
         )}
       </ScrollView>
+      {pickingSound && (
+        <AlarmSoundSheet
+          value={data?.sound?.uri ?? null}
+          onClose={() => {
+            setPickingSound(false);
+            invalidate();
+          }}
+        />
+      )}
     </Screen>
   );
 }

@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { Platform } from 'react-native';
 
-import AlarmClock, { type AlarmSpec } from '../../modules/alarm-clock';
+import AlarmClock, { type AlarmSound, type AlarmSpec } from '../../modules/alarm-clock';
 import DayNotification, { type DayUpdate } from '../../modules/day-notification';
 
 import { getDayUpdates, getNotifSettings, planNotifications, type NotifChannel, type PlannedNotif } from '@/db/notification-plan';
@@ -162,6 +162,13 @@ export function openAlarmFullScreenSettings() {
 }
 
 export const nativeAlarms = !!AlarmClock;
+
+/** Sonnerie des alarmes : celle choisie (null : celle du réveil du téléphone), parmi celles du téléphone. */
+export const alarmSound = (): AlarmSound | null => AlarmClock?.getSound() ?? null;
+export const alarmSounds = (): AlarmSound[] => AlarmClock?.getSounds() ?? [];
+export const setAlarmSound = (uri: string | null) => AlarmClock?.setSound(uri);
+export const previewAlarmSound = (uri: string | null) => AlarmClock?.previewSound(uri);
+export const stopAlarmSoundPreview = () => AlarmClock?.stopPreview();
 
 /** Développement : une alarme dans 10 s (sans le module natif, rien). */
 export function testAlarm() {
