@@ -28,6 +28,14 @@ class AlarmClockModule : Module() {
       AlarmScheduler.once(context, AlarmSpec("test", System.currentTimeMillis() + seconds * 1000L, title, body, "", null))
     }
 
+    /** Sonneries d'alarme du téléphone, et celle choisie pour l'app (null : celle du téléphone). */
+    Function("getSounds") { AlarmSound.list(context) }
+    Function("getSound") { AlarmSound.chosen(context) }
+    Function("setSound") { uri: String? -> AlarmSound.choose(context, uri) }
+    Function("previewSound") { uri: String? -> AlarmSound.preview(context, uri) }
+    Function("stopPreview") { AlarmSound.stopPreview() }
+    OnActivityEntersBackground { AlarmSound.stopPreview() }
+
     Function("canUseFullScreen") {
       if (Build.VERSION.SDK_INT < 34) true
       else context.getSystemService(NotificationManager::class.java)?.canUseFullScreenIntent() ?: false

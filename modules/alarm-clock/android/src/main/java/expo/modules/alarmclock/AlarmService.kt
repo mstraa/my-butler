@@ -10,9 +10,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.graphics.Color
 import android.graphics.drawable.Icon
-import android.media.AudioAttributes
 import android.media.MediaPlayer
-import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
 import android.os.Handler
@@ -24,7 +22,7 @@ import android.os.Vibrator
 import android.os.VibratorManager
 
 /**
- * Service au premier plan qui fait sonner l'alarme : sonnerie d'alarme du téléphone en boucle (flux alarme :
+ * Service au premier plan qui fait sonner l'alarme : sonnerie choisie (AlarmSound) en boucle (flux alarme :
  * elle sonne même en mode silencieux), vibration, et notification plein écran qui ouvre AlarmActivity
  * (sur l'écran verrouillé) ou s'affiche en bandeau (téléphone en main). S'arrête seule au bout de 5 min.
  */
@@ -163,31 +161,8 @@ class AlarmService : Service() {
   }
 
   private fun playSound() {
-    val attrs = AudioAttributes.Builder()
-      .setUsage(AudioAttributes.USAGE_ALARM)
-      .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-      .build()
-    val uris = listOfNotNull(
-      RingtoneManager.getActualDefaultRingtoneUri(this, RingtoneManager.TYPE_ALARM),
-      RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM),
-      RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE),
-      RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION),
-    )
-    for (uri in uris) {
-      try {
-        player = MediaPlayer().apply {
-          setAudioAttributes(attrs)
-          setDataSource(this@AlarmService, uri)
-          isLooping = true
-          prepare()
-          start()
-        }
-        return
-      } catch (e: Exception) {
-        player?.release()
-        player = null
-      }
-    }
+    AlarmSound.stopPreview()
+    player = AlarmSound.play(this, AlarmSound.candidates(this), looping = true)
   }
 
   private fun vibrate() {
@@ -197,8 +172,7 @@ class AlarmService : Service() {
       @Suppress("DEPRECATION") getSystemService(Vibrator::class.java)
     }
     if (v == null || !v.hasVibrator()) return
-    val attrs = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).build()
-    v.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 800, 700), 0), attrs)
+    v.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 800, 700), 0), AlarmSound.attributes)
     vibrator = v
   }
 
