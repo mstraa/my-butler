@@ -14,6 +14,7 @@ import { getNotifSettings, type NotifSettings, setNotifSetting } from '@/db/noti
 import { clearAllData } from '@/db/seed';
 import { seedTestData } from '@/db/test-data';
 import { invalidate, useDbMutation, useDbQuery } from '@/db/use-query';
+import { getVacation, setVacation } from '@/db/vacation';
 import {
   alarmSound, alarmsFullScreenAllowed, nativeAlarms, notificationsAllowed, openAlarmFullScreenSettings, setupNotifications, testAlarm,
   testNotification,
@@ -27,18 +28,24 @@ type Category = { id: number; key: string; name: string; color: string };
 export default function SettingsScreen() {
   const mutate = useDbMutation();
   const { data } = useDbQuery(async (db) => {
-    const [categories, demo, notif, allowed] = await Promise.all([
+    const [categories, demo, notif, allowed, vacation] = await Promise.all([
       db.getAllAsync<Category>('SELECT id, key, name, color FROM categories ORDER BY sort'),
       db.getFirstAsync<{ value: string }>("SELECT value FROM settings WHERE key = 'demo_data'"),
       getNotifSettings(db),
       notificationsAllowed(),
+      getVacation(db),
     ]);
-    return { categories, demo: demo?.value === '1', notif, allowed, fullScreen: alarmsFullScreenAllowed(), sound: alarmSound() };
+    return { categories, demo: demo?.value === '1', notif, allowed, vacation, fullScreen: alarmsFullScreenAllowed(), sound: alarmSound() };
   });
 
   const setNotif = <K extends keyof NotifSettings>(key: K, value: NotifSettings[K]) => {
     Haptics.selectionAsync();
     mutate((db) => setNotifSetting(db, key, value));
+  };
+  // L'écriture relance la replanification des notifications (NotificationSync) et rafraîchit les écrans.
+  const toggleVacation = (on: boolean) => {
+    Haptics.selectionAsync();
+    mutate((db) => setVacation(db, on));
   };
   const allow = async () => {
     // Refusée une fois pour de bon : seuls les réglages du téléphone peuvent la rendre.
@@ -150,6 +157,15 @@ export default function SettingsScreen() {
             <SwitchRow icon="heart" label="Envies de 30 jours" value={data.notif.envies} onChange={(v) => setNotif('envies', v)} />
             <AppText variant="caption" style={styles.hint}>
               Les rappels se règlent aussi sur chaque rendez-vous, tâche et anniversaire.
+            </AppText>
+          </Section>
+        )}
+
+        {data && (
+          <Section title="Mode vacances">
+            <SwitchRow icon="sun" label="Mode vacances" value={data.vacation} onChange={toggleVacation} />
+            <AppText variant="caption" style={styles.hint}>
+              Les objectifs et tâches liés à la maison passent au repos : ni alarme ni rappel, et la série ne casse pas.
             </AppText>
           </Section>
         )}

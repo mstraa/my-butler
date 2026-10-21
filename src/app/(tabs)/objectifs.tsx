@@ -64,7 +64,7 @@ function ObjectifsBody({ bottomOffset }: { bottomOffset: number }) {
   const [tab, setTab] = useState<Tab>('list');
   const { data: goals } = useDbQuery((db) => listGoals(db, today), today, { cacheId: 'objectifs' });
 
-  // Tous dans l'ordre choisi ; ceux en repos (période personnalisée) restent hors du score.
+  // Tous dans l'ordre choisi ; ceux en repos (période personnalisée, mode vacances) restent hors du score.
   const all = (goals ?? []).filter((g) => tab === 'list' || g.period === tab);
   const mine = all.filter((g) => !g.off);
   const doneN = mine.filter((g) => g.done).length;
@@ -201,7 +201,7 @@ function ListRow({ g, first, today, onPress }: { g: GoalProgress; first: boolean
       ? g.done ? 'fait' : '—'
       : `${fmtGoal(g.value)} / ${fmtGoal(g.target)}${g.unit && g.kind !== 'counter' ? ` ${g.unit}` : ''}`;
   const meta = g.off
-    ? `${repeatLabel(g.period, g.repeat)}${g.next ? ` · ${nextLabel(g, today)}` : ''}`
+    ? `${repeatLabel(g.period, g.repeat)}${g.next || g.vacation ? ` · ${nextLabel(g, today)}` : ''}`
     : g.done ? 'atteint' : g.kind === 'bool' ? 'pas encore' : `reste ${fmtGoal(left)}`;
   const long = STREAK_LONG[g.period][g.streak > 1 ? 1 : 0];
   return (
@@ -254,13 +254,14 @@ function ListRow({ g, first, today, onPress }: { g: GoalProgress; first: boolean
 
 /** « reprend demain », « reprend lun. 30 sept. », « reprend la sem. du 6 oct. », « reprend en novembre ». */
 function nextLabel(g: GoalProgress, today: DayKey) {
+  if (g.vacation) return 'mode vacances';
   if (!g.next) return '';
   if (g.period === 'day') return g.next === shiftDay(today, 1) ? 'reprend demain' : `reprend ${mediumDayLabel(g.next)}`;
   if (g.period === 'week') return `reprend la semaine du ${weekRangeLabel(g.next)}`;
   return `reprend en ${format(parseDay(g.next), 'MMMM', { locale: fr })}`;
 }
 
-/** Objectif en repos sur la période en cours (période personnalisée) : rien à saisir. */
+/** Objectif en repos sur la période en cours (période personnalisée, mode vacances) : rien à saisir. */
 function RestCard({ g, today }: { g: GoalProgress; today: DayKey }) {
   return (
     <Pressable
@@ -285,7 +286,7 @@ function RestCard({ g, today }: { g: GoalProgress; today: DayKey }) {
           </AppText>
         </View>
         <AppText variant="label" color={colors.textTertiary}>
-          Repos
+          {g.vacation ? 'Vacances' : 'Repos'}
         </AppText>
       </View>
     </Pressable>

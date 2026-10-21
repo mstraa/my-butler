@@ -13,12 +13,17 @@ import { DateTimeSheet } from '@/components/form/date-time-sheet';
 import { NoteEditor } from '@/components/form/note-editor';
 import { Chip, FieldLabel, OptionSheet, PickerField, SwitchRow, TextField } from '@/components/form/fields';
 import { Icon } from '@/components/icon';
-import type { Category, EventDraft } from '@/db/events';
+import type { Category, EventDraft, EventReminder } from '@/db/events';
 import { RECURRENCES, REMINDER_KINDS, REMINDERS } from '@/lib/event-options';
 import { dateFieldLabel, dayOf, minutesOf, parseDay, parseStamp, shiftDay, type Stamp, stamp, timeOf } from '@/lib/dates';
 import { colors, fonts } from '@/theme/tokens';
 
 export { RECURRENCES, REMINDERS };
+
+/** Délais proposés pour un rappel de plus (sans « Aucun »), et l'ordre où on les ajoute. */
+const DELAYS = REMINDERS.filter((r): r is { value: number; label: string } => r.value !== null);
+const ADD_ORDER = [15, 60, 1440, 30, 120, 5, 0];
+const MAX_REMINDERS = 5;
 
 type Props = {
   title: string;
@@ -41,10 +46,28 @@ const addMinutes = (s: Stamp, min: number) => {
 export function EventForm({ title, initial, categories, onSave, onDelete, readOnlyNote, external }: Props) {
   const [d, setD] = useState<EventDraft>(() => ({ ...initial, notes: initial.notes ?? '', location: initial.location ?? '' }));
   const [sheet, setSheet] = useState<'reminder' | 'reminderKind' | 'repeat' | 'day' | 'start' | 'end' | 'deadline' | null>(null);
+  // Rappel ouvert dans les feuilles « Rappel » et « Type de rappel » (rang dans la liste).
+  const [editing, setEditing] = useState(0);
   const [saving, setSaving] = useState(false);
   const [showErrors, setShowErrors] = useState(false);
 
   const set = (patch: Partial<EventDraft>) => setD((cur) => ({ ...cur, ...patch }));
+  const setReminder = (i: number, patch: Partial<EventReminder>) =>
+    setD((cur) => ({ ...cur, reminders: cur.reminders.map((r, j) => (j === i ? { ...r, ...patch } : r)) }));
+  const openReminder = (i: number, which: 'reminder' | 'reminderKind') => {
+    setEditing(i);
+    setSheet(which);
+  };
+  /** Nouveau rappel : le premier délai pas encore pris, en notification ; sa feuille s'ouvre aussitôt. */
+  const addReminder = () => {
+    const min = ADD_ORDER.find((m) => !d.reminders.some((r) => r.min === m)) ?? 15;
+    set({ reminders: [...d.reminders, { min, kind: 'notif' }] });
+    openReminder(d.reminders.length, 'reminder');
+  };
+  const removeReminder = (i: number) => {
+    Haptics.selectionAsync();
+    set({ reminders: d.reminders.filter((_, j) => j !== i) });
+  };
 
   const endsAt = d.endsAt ?? addMinutes(d.startsAt, 60);
   /** Changer le jour ou l'heure de début garde la durée du rendez-vous. */
@@ -199,12 +222,6 @@ export function EventForm({ title, initial, categories, onSave, onDelete, readOn
 
           <View style={styles.row}>
             <PickerField
-              label="Rappel"
-              chevron
-              value={REMINDERS.find((r) => r.value === d.reminderMin)?.label ?? 'Aucun'}
-              onPress={() => setSheet('reminder')}
-            />
-            <PickerField
               label="Répéter"
               chevron
               disabled={external}
@@ -212,16 +229,44 @@ export function EventForm({ title, initial, categories, onSave, onDelete, readOn
               onPress={() => setSheet('repeat')}
             />
           </View>
-          {d.reminderMin !== null && (
-            <Animated.View entering={FadeIn.duration(200)}>
-              <PickerField
-                label="Type de rappel"
-                chevron
-                value={d.reminderKind === 'alarm' ? 'Alarme · sonnerie et plein écran' : 'Notification'}
-                onPress={() => setSheet('reminderKind')}
-              />
-            </Animated.View>
-          )}
+
+          <Animated.View layout={LinearTransition.duration(250)} style={{ gap: 10 }}>
+            {d.reminders.map((r, i) => (
+              <Animated.View key={i} entering={FadeIn.duration(200)} style={[styles.row, { alignItems: 'flex-end' }]}>
+                <PickerField
+                  label="Rappel"
+                  chevron
+                  flex={1.2}
+                  value={REMINDERS.find((o) => o.value === r.min)?.label ?? `${r.min} min avant`}
+                  onPress={() => openReminder(i, 'reminder')}
+                />
+                <PickerField
+                  label="Type"
+                  chevron
+                  value={r.kind === 'alarm' ? 'Alarme' : 'Notification'}
+                  onPress={() => openReminder(i, 'reminderKind')}
+                />
+                <Pressable
+                  onPress={() => removeReminder(i)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Retirer ce rappel"
+                  style={({ pressed }) => [styles.removeBtn, pressed && { borderColor: colors.textSecondary }]}>
+                  <Icon name="x" size={16} color={colors.textSecondary} strokeWidth={2} />
+                </Pressable>
+              </Animated.View>
+            ))}
+            {d.reminders.length < MAX_REMINDERS && (
+              <Pressable
+                onPress={addReminder}
+                accessibilityRole="button"
+                style={({ pressed }) => [styles.addBtn, pressed && { borderColor: colors.textSecondary }]}>
+                <Icon name={d.reminders.length ? 'plus' : 'bell'} size={16} color={colors.textSecondary} strokeWidth={2} />
+                <AppText variant="label" color={colors.textSecondary}>
+                  {d.reminders.length ? 'Ajouter un rappel' : 'Ajouter un rappel ou une alarme'}
+                </AppText>
+              </Pressable>
+            )}
+          </Animated.View>
 
           <Animated.View layout={LinearTransition.duration(250)} style={styles.deadlineCard}>
             <SwitchRow label="Échéance avant le rdv" icon="timer" value={!!d.deadline} onChange={toggleDeadline} />
@@ -319,22 +364,26 @@ export function EventForm({ title, initial, categories, onSave, onDelete, readOn
           onClose={() => setSheet(null)}
         />
       )}
-      <OptionSheet
-        visible={sheet === 'reminder'}
-        title="Rappel"
-        options={REMINDERS}
-        value={d.reminderMin}
-        onPick={(reminderMin) => set({ reminderMin })}
-        onClose={() => setSheet(null)}
-      />
-      <OptionSheet
-        visible={sheet === 'reminderKind'}
-        title="Type de rappel"
-        options={REMINDER_KINDS}
-        value={d.reminderKind}
-        onPick={(reminderKind) => set({ reminderKind })}
-        onClose={() => setSheet(null)}
-      />
+      {d.reminders[editing] && (
+        <>
+          <OptionSheet
+            visible={sheet === 'reminder'}
+            title="Rappel"
+            options={DELAYS}
+            value={d.reminders[editing].min}
+            onPick={(min) => setReminder(editing, { min })}
+            onClose={() => setSheet(null)}
+          />
+          <OptionSheet
+            visible={sheet === 'reminderKind'}
+            title="Type de rappel"
+            options={REMINDER_KINDS}
+            value={d.reminders[editing].kind}
+            onPick={(kind) => setReminder(editing, { kind })}
+            onClose={() => setSheet(null)}
+          />
+        </>
+      )}
       <OptionSheet
         visible={sheet === 'repeat'}
         title="Répéter"
@@ -390,6 +439,26 @@ const styles = StyleSheet.create({
     borderRadius: 14,
   },
   locked: { opacity: 0.45 },
+  removeBtn: {
+    width: 48,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.borderDashed,
+  },
+  addBtn: {
+    height: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: colors.borderDashed,
+  },
   deleteBtn: {
     height: 48,
     flexDirection: 'row',

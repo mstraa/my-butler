@@ -21,8 +21,9 @@ export default function NewGoalScreen() {
         unit: '',
         color: null,
         icon: 'target',
-        alarm: null,
+        alarms: [],
         repeat: EVERY_PERIOD(todayKey()),
+        home: false,
       }}
       onSave={async (d) => {
         await mutate((db) => createGoal(db, d));

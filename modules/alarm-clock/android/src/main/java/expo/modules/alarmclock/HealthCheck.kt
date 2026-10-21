@@ -40,8 +40,14 @@ object HealthCheck {
       "steps" -> {
         val goal = check.optDouble("goal", 0.0)
         if (goal <= 0) return false
-        val res = client.aggregate(AggregateRequest(setOf(StepsRecord.COUNT_TOTAL), TimeRangeFilter.between(startOfDay, now)))
-        (res[StepsRecord.COUNT_TOTAL] ?: 0L) >= goal
+        // Comme l'import de l'app : le total de la source qui a compté le plus (l'agrégat global
+        // préfère souvent le téléphone, qui en compte moins que la montre).
+        val range = TimeRangeFilter.between(startOfDay, now)
+        val all = client.aggregate(AggregateRequest(setOf(StepsRecord.COUNT_TOTAL), range))
+        val best = all.dataOrigins.maxOfOrNull { origin ->
+          client.aggregate(AggregateRequest(setOf(StepsRecord.COUNT_TOTAL), range, setOf(origin)))[StepsRecord.COUNT_TOTAL] ?: 0L
+        } ?: 0L
+        maxOf(all[StepsRecord.COUNT_TOTAL] ?: 0L, best) >= goal
       }
       // La nuit qui finit aujourd'hui (comme l'import de l'app : une nuit compte pour son jour de lever).
       "sleep" -> {

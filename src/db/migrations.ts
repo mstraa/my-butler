@@ -303,6 +303,21 @@ const MIGRATIONS: string[] = [
     PRIMARY KEY (week, food_id)
   );
   `,
+  /* v18 — objectifs et tâches liés à la maison : au repos, sans alarme ni rappel, pendant le mode vacances */ `
+  ALTER TABLE goals ADD COLUMN home INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE tasks ADD COLUMN home INTEGER NOT NULL DEFAULT 0;
+  `,
+  /* v19 — plusieurs alarmes par objectif ou suivi, plusieurs rappels par rendez-vous (listes JSON) */ `
+  -- Remplacent alarm_time / alarm_days et reminder_min / reminder_kind (gardées, plus lues).
+  ALTER TABLE goals ADD COLUMN alarms TEXT NOT NULL DEFAULT '[]';           -- [{"time":"HH:mm","days":127}]
+  UPDATE goals SET alarms = '[{"time":"' || alarm_time || '","days":' || COALESCE(NULLIF(alarm_days, 0), 127) || '}]' WHERE alarm_time IS NOT NULL;
+  ALTER TABLE trackers ADD COLUMN alarms TEXT NOT NULL DEFAULT '[]';
+  UPDATE trackers SET alarms = '[{"time":"' || alarm_time || '","days":' || COALESCE(NULLIF(alarm_days, 0), 127) || '}]' WHERE alarm_time IS NOT NULL;
+  ALTER TABLE events ADD COLUMN reminders TEXT NOT NULL DEFAULT '[]';       -- [{"min":15,"kind":"notif"}] ; kind 'notif' | 'alarm'
+  UPDATE events SET reminders = '[{"min":' || reminder_min || ',"kind":"' || COALESCE(reminder_kind, 'notif') || '"}]' WHERE reminder_min IS NOT NULL;
+  ALTER TABLE google_series ADD COLUMN reminders TEXT NOT NULL DEFAULT '[]';
+  UPDATE google_series SET reminders = '[{"min":' || reminder_min || ',"kind":"' || COALESCE(reminder_kind, 'notif') || '"}]' WHERE reminder_min IS NOT NULL;
+  `,
 ];
 
 export async function migrateDbIfNeeded(db: SQLiteDatabase) {
