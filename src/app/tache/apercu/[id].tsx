@@ -153,6 +153,7 @@ function Infos({ t }: { t: TaskDetail }) {
       color: colors.late,
     },
     { icon: 'wallet', label: 'Dépense suivie', value: t.tracksExpense ? expense : null },
+    { icon: 'home', label: 'Liée à la maison', value: t.home ? 'Sans rappel pendant le mode vacances' : null },
     { icon: 'clock', label: 'Historique', value: t.postponed ? `Reportée ${t.postponed} fois` : null },
     { icon: 'note', label: "Motif d'abandon", value: t.state === 'abandoned' ? t.abandonReason || 'sans motif' : null },
   ];

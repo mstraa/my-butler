@@ -7,8 +7,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppText } from '@/components/app-text';
 import { showDialog } from '@/components/dialog';
-import { AlarmField, AlarmTimeSheet } from '@/components/form/alarm-field';
-import { Chip, FieldLabel, TextField } from '@/components/form/fields';
+import { AlarmsField, AlarmTimeSheet } from '@/components/form/alarm-field';
+import { Chip, FieldLabel, SwitchRow, TextField } from '@/components/form/fields';
 import { IconColorPicker } from '@/components/form/icon-color-picker';
 import { RepeatField } from '@/components/form/repeat-field';
 import { Icon } from '@/components/icon';
@@ -45,7 +45,8 @@ export function GoalForm({ title, initial, onSave, onArchive, onDelete }: Props)
   const [targetText, setTargetText] = useState(initial.kind === 'bool' || !initial.target ? '' : String(initial.target).replace('.', ','));
   const [showErrors, setShowErrors] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [pickingTime, setPickingTime] = useState(false);
+  // Alarme dont on choisit l'heure (rang dans la liste), sinon null.
+  const [pickingTime, setPickingTime] = useState<number | null>(null);
   const [custom, setCustom] = useState(isCustomRepeat(initial.repeat));
   const set = (patch: Partial<GoalDraft>) => setD((c) => ({ ...c, ...patch }));
 
@@ -194,16 +195,26 @@ export function GoalForm({ title, initial, onSave, onArchive, onDelete }: Props)
           </Animated.View>
 
           <Animated.View entering={FadeInDown.delay(80).duration(260)}>
-            <AlarmField
-              value={d.alarm}
-              onChange={(alarm) => set({ alarm })}
-              onPickTime={() => setPickingTime(true)}
+            <AlarmsField
+              value={d.alarms}
+              onChange={(alarms) => set({ alarms })}
+              onPickTime={setPickingTime}
               hint={
                 (d.period === 'day'
                   ? "Ne sonne pas si l'objectif du jour est déjà atteint."
                   : `Ne sonne plus une fois l'objectif ${d.period === 'week' ? 'de la semaine' : 'du mois'} atteint.`) +
                 (custom ? ' Ni pendant les périodes de repos.' : '')
               }
+            />
+          </Animated.View>
+
+          <Animated.View entering={FadeInDown.delay(100).duration(260)} style={styles.card}>
+            <SwitchRow
+              icon="home"
+              label="Lié à la maison"
+              sub="Au repos pendant le mode vacances"
+              value={d.home}
+              onChange={(home) => set({ home })}
             />
           </Animated.View>
 
@@ -257,8 +268,13 @@ export function GoalForm({ title, initial, onSave, onArchive, onDelete }: Props)
           )}
         </ScrollView>
       </KeyboardAvoidingView>
-      {pickingTime && d.alarm && (
-        <AlarmTimeSheet value={d.alarm.time} onDone={(time) => set({ alarm: { ...d.alarm!, time } })} onClose={() => setPickingTime(false)} />
+      {pickingTime !== null && d.alarms[pickingTime] && (
+        <AlarmTimeSheet
+          key={pickingTime}
+          value={d.alarms[pickingTime].time}
+          onDone={(time) => set({ alarms: d.alarms.map((a, i) => (i === pickingTime ? { ...a, time } : a)) })}
+          onClose={() => setPickingTime(null)}
+        />
       )}
     </SafeAreaView>
   );
@@ -290,6 +306,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   kindOn: { borderColor: colors.text, backgroundColor: colors.row },
+  card: {
+    padding: 14,
+    backgroundColor: colors.surfaceRaised,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 22,
+  },
   ghostBtn: {
     flex: 1,
     height: 48,

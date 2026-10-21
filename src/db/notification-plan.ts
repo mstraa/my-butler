@@ -4,8 +4,10 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { type AgendaItem, getAgendaDays, getLateItems, occurrencesInRange, type Recurrence } from '@/db/agenda';
 import { ageAt, nextOccurrence } from '@/db/birthdays';
+import { remindersOf } from '@/db/events';
 import { fmtGoal, listGoals, periodRange } from '@/db/goals';
 import { getDayTrackers, healthMetricOf } from '@/db/tracking';
+import { getVacation } from '@/db/vacation';
 import { OLD_DAYS } from '@/db/wishes';
 import type { AlarmHealthCheck } from '../../modules/alarm-clock';
 import type { DayPayload } from '../../modules/day-notification';
@@ -110,38 +112,43 @@ export async function planNotifications(db: SQLiteDatabase, s: NotifSettings, no
   const push = (n: PlannedNotif) => {
     if (n.at.getTime() > now.getTime() + 5_000) out.push(n);
   };
+  // Mode vacances : objectifs et tâches liés à la maison sans alarme ni rappel.
+  const vacances = await getVacation(db);
 
   if (s.rappels || s.alarmes) {
-    /* Rendez-vous : rappel avant chaque occurrence (répétitions comprises), en notification ou en alarme. */
+    /* Rendez-vous : chaque rappel avant chaque occurrence (répétitions comprises), en notification ou en alarme. */
     const events = await db.getAllAsync<{
       id: number; title: string; starts_at: Stamp; all_day: number; location: string | null;
-      reminder_min: number; reminder_kind: string; recurrence: Recurrence;
+      reminders: string; recurrence: Recurrence;
     }>(
-      `SELECT id, title, starts_at, all_day, location, reminder_min, reminder_kind, recurrence FROM events
-        WHERE reminder_min IS NOT NULL AND cancelled_at IS NULL AND starts_at < ?`,
+      `SELECT id, title, starts_at, all_day, location, reminders, recurrence FROM events
+        WHERE reminders <> '[]' AND cancelled_at IS NULL AND starts_at < ?`,
       `${shiftDay(today, EVENT_DAYS + 1)}T00:00`,
     );
     for (const e of events) {
-      const alarm = e.reminder_kind === 'alarm';
-      if (!(alarm ? s.alarmes : s.rappels)) continue;
+      // Le rang du rappel dans la liste rend l'id unique (et stable tant que la liste ne change pas).
+      const reminders = [...remindersOf(e.reminders).entries()].filter(([, r]) => (r.kind === 'alarm' ? s.alarmes : s.rappels));
+      if (!reminders.length) continue;
       const time = e.all_day ? '09:00' : timeOf(e.starts_at);
       for (const occ of occurrencesInRange(dayOf(e.starts_at), e.recurrence, today, shiftDay(today, EVENT_DAYS))) {
         const start = at(occ, time);
         const details = [e.all_day ? 'toute la journée' : time, e.location].filter(Boolean).join(' · ');
-        push({
-          id: `rdv-${e.id}-${occ}`,
-          at: addMinutes(start, -e.reminder_min),
-          channel: 'rappels',
-          title: e.title,
-          body: `${beforeLabel(e.reminder_min)} · ${details}`,
-          url: `/rdv/apercu/${e.id}?day=${occ}`,
-          alarm,
-        });
+        for (const [k, r] of reminders) {
+          push({
+            id: `rdv-${e.id}-${k}-${occ}`,
+            at: addMinutes(start, -r.min),
+            channel: 'rappels',
+            title: e.title,
+            body: `${beforeLabel(r.min)} · ${details}`,
+            url: `/rdv/apercu/${e.id}?day=${occ}`,
+            alarm: r.kind === 'alarm',
+          });
+        }
       }
     }
   }
 
-  if (s.alarmes) await planDailyAlarms(db, today, push);
+  if (s.alarmes) await planDailyAlarms(db, today, vacances, push);
 
   if (s.rappels) {
 
@@ -164,11 +171,13 @@ export async function planNotifications(db: SQLiteDatabase, s: NotifSettings, no
 
     /* Tâches : rappel avant l'échéance, échéance passée, puis relance quotidienne tant qu'elle traîne. */
     const tasks = await db.getAllAsync<{
-      id: number; title: string; due_at: Stamp; reminder_min: number | null; show_late: number; nag_at: string | null;
+      id: number; title: string; due_at: Stamp; reminder_min: number | null; show_late: number; nag_at: string | null; home: number;
     }>(
-      "SELECT id, title, due_at, reminder_min, show_late, nag_at FROM tasks WHERE state = 'open' AND due_at IS NOT NULL",
+      "SELECT id, title, due_at, reminder_min, show_late, nag_at, home FROM tasks WHERE state = 'open' AND due_at IS NOT NULL",
     );
     for (const t of tasks) {
+      // Mode vacances : les tâches liées à la maison restent dans les listes, sans rappel ni relance.
+      if (vacances && t.home) continue;
       const due = parseStamp(t.due_at);
       if (t.reminder_min !== null) {
         push({
@@ -255,60 +264,66 @@ export async function planNotifications(db: SQLiteDatabase, s: NotifSettings, no
 }
 
 /**
- * Alarmes quotidiennes des objectifs et des suivis, aux jours choisis. Pas d'alarme quand c'est déjà fait :
+ * Alarmes quotidiennes des objectifs et des suivis, chacune à son heure et à ses jours. Pas d'alarme quand c'est déjà fait :
  * objectif atteint sur la période en cours, suivi déjà noté aujourd'hui (le plan est recalculé à chaque saisie).
  * Suivi relié à Health Connect : ses valeurs arrivent sans l'app, l'alarme relit donc Health Connect en sonnant.
  */
-async function planDailyAlarms(db: SQLiteDatabase, today: DayKey, push: (n: PlannedNotif) => void) {
+async function planDailyAlarms(db: SQLiteDatabase, today: DayKey, vacances: boolean, push: (n: PlannedNotif) => void) {
   const PERIOD = { day: 'par jour', week: 'par semaine', month: 'par mois' } as const;
   for (const g of await listGoals(db, today)) {
-    if (!g.alarm) continue;
+    // Mode vacances : pas d'alarme pour un objectif lié à la maison, sur tout l'horizon.
+    if (!g.alarms.length || (g.home && vacances)) continue;
     const periodEnd = periodRange(g.period, today)[1];
     const what = g.kind === 'bool' ? 'Fait aujourd\'hui ?' : `${fmtGoal(g.target)}${g.unit ? ` ${g.unit}` : ''} ${PERIOD[g.period]}`;
     for (let i = 0; i <= EVENT_DAYS; i++) {
       const day = shiftDay(today, i);
-      if (!alarmOnDay(g.alarm.days, day)) continue;
       // Période de repos (période personnalisée) : pas d'alarme.
       if (!isActiveOn(g.period, g.repeat, day)) continue;
       // Période en cours déjà atteinte (ou oui/non déjà répondu aujourd'hui) : rien jusqu'à la suivante.
       if (day <= periodEnd && (g.done || (g.kind === 'bool' && day === today && g.answered))) continue;
       const progress = day <= periodEnd && g.kind !== 'bool' ? ` · ${fmtGoal(g.value)} / ${fmtGoal(g.target)} pour l'instant` : '';
-      push({
-        id: `alarme-objectif-${g.id}-${day}`,
-        at: at(day, g.alarm.time),
-        channel: 'rappels',
-        title: g.title,
-        body: `Objectif · ${what}${i === 0 ? progress : ''}`,
-        url: '/objectifs',
-        alarm: true,
-      });
+      for (const [k, a] of g.alarms.entries()) {
+        if (!alarmOnDay(a.days, day)) continue;
+        push({
+          id: `alarme-objectif-${g.id}-${k}-${day}`,
+          at: at(day, a.time),
+          channel: 'rappels',
+          title: g.title,
+          body: `Objectif · ${what}${i === 0 ? progress : ''}`,
+          url: '/objectifs',
+          alarm: true,
+        });
+      }
     }
   }
 
   for (const t of await getDayTrackers(db, today)) {
-    if (!t.alarm) continue;
+    if (!t.alarms.length) continue;
     const metric = t.source === 'health' ? healthMetricOf(t) : null;
     const health: AlarmHealthCheck | undefined =
       metric === 'steps' ? { metric: 'steps', goal: t.goal ?? 0 } : metric === 'sleep' ? { metric: 'sleep' } : undefined;
     // Déjà noté aujourd'hui ; pour les pas importés, seulement si l'objectif est atteint (sinon il en manque).
     const doneToday = metric === 'steps' ? t.goal !== null && (t.value ?? 0) >= t.goal : t.value !== null;
+    const body =
+      metric === 'steps'
+        ? t.goal ? `Suivi · objectif de ${fmtGoal(t.goal)} pas non atteint` : 'Suivi · tes pas du jour'
+        : metric === 'sleep' ? 'Suivi · ta nuit n\'est pas encore arrivée de Health Connect' : 'Suivi · pense à noter ta valeur du jour';
     for (let i = 0; i <= EVENT_DAYS; i++) {
       const day = shiftDay(today, i);
-      if (!alarmOnDay(t.alarm.days, day)) continue;
       if (i === 0 && doneToday) continue;
-      push({
-        id: `alarme-suivi-${t.id}-${day}`,
-        at: at(day, t.alarm.time),
-        channel: 'rappels',
-        title: t.name,
-        body:
-          metric === 'steps'
-            ? t.goal ? `Suivi · objectif de ${fmtGoal(t.goal)} pas non atteint` : 'Suivi · tes pas du jour'
-            : metric === 'sleep' ? 'Suivi · ta nuit n\'est pas encore arrivée de Health Connect' : 'Suivi · pense à noter ta valeur du jour',
-        url: '/suivi',
-        alarm: true,
-        health,
-      });
+      for (const [k, a] of t.alarms.entries()) {
+        if (!alarmOnDay(a.days, day)) continue;
+        push({
+          id: `alarme-suivi-${t.id}-${k}-${day}`,
+          at: at(day, a.time),
+          channel: 'rappels',
+          title: t.name,
+          body,
+          url: '/suivi',
+          alarm: true,
+          health,
+        });
+      }
     }
   }
 }

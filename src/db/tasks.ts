@@ -19,6 +19,8 @@ export type TaskDraft = {
   estimateCents: number | null;
   /** Note libre (mise en forme à l'affichage). */
   notes: string;
+  /** Liée à la maison (« Sortir la poubelle ») : ni rappel ni relance pendant le mode vacances. */
+  home: boolean;
 };
 
 export type TaskRecord = TaskDraft & {
@@ -29,7 +31,7 @@ export type TaskRecord = TaskDraft & {
 type TaskRow = {
   id: number; title: string; day: DayKey | null; due_at: Stamp | null; category_id: number | null;
   tracks_expense: number; estimate_cents: number | null; state: TaskRecord['state'];
-  reminder_min: number | null; show_late: number; nag_at: string | null; notes: string | null;
+  reminder_min: number | null; show_late: number; nag_at: string | null; notes: string | null; home: number;
 };
 
 export async function getTask(db: SQLiteDatabase, id: number): Promise<TaskRecord | null> {
@@ -47,6 +49,7 @@ export async function getTask(db: SQLiteDatabase, id: number): Promise<TaskRecor
     tracksExpense: !!r.tracks_expense,
     estimateCents: r.estimate_cents,
     notes: r.notes ?? '',
+    home: !!r.home,
     state: r.state,
   };
 }
@@ -85,13 +88,14 @@ const columns = (d: TaskDraft) => [
   d.due && d.showLate ? 1 : 0,
   d.due && d.showLate ? d.nagAt : null,
   d.notes.trim() || null,
+  d.home ? 1 : 0,
 ];
 
 export async function createTask(db: SQLiteDatabase, d: TaskDraft) {
   const res = await db.runAsync(
     `INSERT INTO tasks (title, day, due_at, category_id, tracks_expense, estimate_cents, reminder_min, show_late, nag_at,
-                        notes, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                        notes, home, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ...columns(d), nowStamp(),
   );
   return res.lastInsertRowId;
@@ -100,7 +104,7 @@ export async function createTask(db: SQLiteDatabase, d: TaskDraft) {
 export async function updateTask(db: SQLiteDatabase, id: number, d: TaskDraft) {
   await db.runAsync(
     `UPDATE tasks SET title = ?, day = ?, due_at = ?, category_id = ?, tracks_expense = ?, estimate_cents = ?,
-                      reminder_min = ?, show_late = ?, nag_at = ?, notes = ?
+                      reminder_min = ?, show_late = ?, nag_at = ?, notes = ?, home = ?
       WHERE id = ?`,
     ...columns(d), id,
   );

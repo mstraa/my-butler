@@ -73,19 +73,25 @@ export async function grantedHealthMetrics() {
 }
 
 /**
- * Pas de chaque jour entre `from` et `to` (minuits locaux). L'agrégat de Health Connect
- * dédoublonne les sources (montre, téléphone) selon les priorités réglées par l'utilisateur.
- * Les jours sans aucune donnée sont omis.
+ * Pas de chaque jour entre `from` et `to` (minuits locaux). Plusieurs apps écrivent des pas (Zepp,
+ * le téléphone lui-même, Garmin…) et l'agrégat global garde, heure par heure, la source prioritaire :
+ * souvent le téléphone, qui en compte moins que la montre. On retient donc, pour chaque jour,
+ * le total de la source qui en a compté le plus. Les jours sans aucune donnée sont omis.
  */
 export async function readDailySteps(from: Date, to: Date) {
   const out: { start: Date; count: number }[] = [];
   for (let d = new Date(from); d < to; d = nextMidnight(d)) {
-    const end = nextMidnight(d);
-    const res = await aggregateRecord({
-      recordType: 'Steps',
-      timeRangeFilter: { operator: 'between', startTime: d.toISOString(), endTime: end.toISOString() },
-    });
-    if (res.dataOrigins.length) out.push({ start: new Date(d), count: res.COUNT_TOTAL });
+    const timeRangeFilter = { operator: 'between', startTime: d.toISOString(), endTime: nextMidnight(d).toISOString() } as const;
+    try {
+      const all = await aggregateRecord({ recordType: 'Steps', timeRangeFilter });
+      if (!all.dataOrigins.length) continue;
+      let count = all.COUNT_TOTAL;
+      for (const origin of all.dataOrigins) {
+        const res = await aggregateRecord({ recordType: 'Steps', timeRangeFilter, dataOriginFilter: [origin] });
+        count = Math.max(count, res.COUNT_TOTAL);
+      }
+      out.push({ start: new Date(d), count });
+    } catch {} // Un jour illisible n'empêche pas d'importer les autres.
   }
   return out;
 }

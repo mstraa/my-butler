@@ -24,7 +24,7 @@ import { duplicateEvent, type EventRecord, getCategories, getEvent, restoreEvent
 import { useDbMutation, useDbQuery } from '@/db/use-query';
 import { dayOf } from '@/lib/dates';
 import {
-  categoryOf, deadlineLabel, durationLabel, longDate, occurrenceOf, recurrenceLabel, reminderLabel, timeRange,
+  categoryOf, deadlineLabel, durationLabel, longDate, occurrenceOf, recurrenceLabel, remindersInfo, timeRange,
 } from '@/lib/event-format';
 import { colors, fonts, withAlpha } from '@/theme/tokens';
 
@@ -297,7 +297,7 @@ function PreviewTop({
   type Info = { icon: IconName; label: string; value: string | null; color?: string };
   const allInfos: Info[] = [
     { icon: 'pin', label: 'Lieu', value: e.location || null },
-    { icon: e.reminderKind === 'alarm' ? 'alarm' : 'bell', label: e.reminderKind === 'alarm' ? 'Alarme' : 'Rappel', value: reminderLabel(e.reminderMin) },
+    remindersInfo(e.reminders),
     { icon: 'repeat', label: 'Répéter', value: recurrenceLabel(e.recurrence) },
     {
       icon: 'flag',

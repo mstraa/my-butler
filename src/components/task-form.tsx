@@ -283,6 +283,16 @@ export function TaskForm({ title, initial, categories, onSave, onDelete }: Props
             )}
           </Animated.View>
 
+          <Animated.View entering={FadeInDown.delay(200).duration(400)} style={styles.card}>
+            <SwitchRow
+              icon="home"
+              label="Liée à la maison"
+              sub="Sans rappel pendant le mode vacances"
+              value={d.home}
+              onChange={(home) => set({ home })}
+            />
+          </Animated.View>
+
           <Animated.View entering={FadeInDown.delay(220).duration(400)}>
             <NoteEditor
               value={d.notes}

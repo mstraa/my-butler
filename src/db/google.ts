@@ -99,7 +99,7 @@ export async function applyGoogleSync(
     );
     const byExt = new Map(existing.map((r) => [r.external_id, r]));
     const series = new Map(
-      (await db.getAllAsync<{ series_id: string; reminder_min: number | null; reminder_kind: string }>('SELECT * FROM google_series')).map(
+      (await db.getAllAsync<{ series_id: string; reminders: string }>('SELECT series_id, reminders FROM google_series')).map(
         (s) => [s.series_id, s],
       ),
     );
@@ -110,14 +110,14 @@ export async function applyGoogleSync(
       seen.add(e.externalId);
       const prev = byExt.get(e.externalId);
       if (!prev) {
-        // Nouvelle occurrence d'une série qui a un rappel : elle le reprend.
+        // Nouvelle occurrence d'une série qui a des rappels : elle les reprend.
         const s = series.get(seriesOf(e.externalId) ?? '');
         await db.runAsync(
           `INSERT INTO events (title, category_id, starts_at, ends_at, all_day, location, meet_url, recurrence,
-                               reminder_min, reminder_kind, source, external_id, calendar_id, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, 'none', ?, ?, 'google', ?, ?, ?)`,
+                               reminders, source, external_id, calendar_id, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'none', ?, 'google', ?, ?, ?)`,
           e.title, calendars[e.calendarId], e.startsAt, e.endsAt, e.allDay ? 1 : 0, e.location, e.meetUrl,
-          s?.reminder_min ?? null, s?.reminder_kind ?? 'notif', e.externalId, e.calendarId, nowStamp(),
+          s?.reminders ?? '[]', e.externalId, e.calendarId, nowStamp(),
         );
         changed++;
       } else if (

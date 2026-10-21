@@ -31,6 +31,7 @@ export default function NewTaskScreen() {
         tracksExpense: false,
         estimateCents: null,
         notes: '',
+        home: false,
       }}
       onSave={async (draft) => {
         await mutate((db) => createTask(db, draft));
