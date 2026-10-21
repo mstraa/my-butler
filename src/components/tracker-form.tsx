@@ -8,7 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppText } from '@/components/app-text';
 import { showDialog } from '@/components/dialog';
-import { AlarmField, AlarmTimeSheet } from '@/components/form/alarm-field';
+import { AlarmsField, AlarmTimeSheet } from '@/components/form/alarm-field';
 import { Chip, FieldLabel, SwitchRow, TextField } from '@/components/form/fields';
 import { IconColorPicker } from '@/components/form/icon-color-picker';
 import { Icon, type IconName } from '@/components/icon';
@@ -63,12 +63,12 @@ const HEALTH = healthSupported ? 'health' : null;
 
 /** Modèles pour démarrer vite (création seulement). */
 const TEMPLATES: (TrackerDraft & { label: string })[] = [
-  { label: 'Sommeil', name: 'Sommeil', kind: 'sleep', unit: 'h', step: 15, goal: 7 * 60, icon: 'moon', color: categoryColors.sport, source: HEALTH, alarm: null },
-  { label: 'Pas', name: 'Pas', kind: 'quantity', unit: 'pas', step: 1000, goal: 8000, icon: 'steps', color: categoryColors.health, source: HEALTH, alarm: null },
-  { label: 'Lever', name: 'Lever', kind: 'time', unit: '', step: 5, goal: null, icon: 'sun', color: categoryColors.groceries, source: null, alarm: null },
-  { label: 'Eau', name: 'Eau', kind: 'volume', unit: 'L', step: 0.25, goal: 1.5, icon: 'glass', color: categoryColors.work, source: null, alarm: null },
-  { label: 'E-liquide', name: 'E-liquide', kind: 'volume', unit: 'ml', step: 0.5, goal: null, icon: 'drop', color: categoryColors.work, source: null, alarm: null },
-  { label: 'Cafés', name: 'Cafés', kind: 'quantity', unit: 'cafés', step: 1, goal: null, icon: 'coffee', color: categoryColors.friends, source: null, alarm: null },
+  { label: 'Sommeil', name: 'Sommeil', kind: 'sleep', unit: 'h', step: 15, goal: 7 * 60, icon: 'moon', color: categoryColors.sport, source: HEALTH, alarms: [] },
+  { label: 'Pas', name: 'Pas', kind: 'quantity', unit: 'pas', step: 1000, goal: 8000, icon: 'steps', color: categoryColors.health, source: HEALTH, alarms: [] },
+  { label: 'Lever', name: 'Lever', kind: 'time', unit: '', step: 5, goal: null, icon: 'sun', color: categoryColors.groceries, source: null, alarms: [] },
+  { label: 'Eau', name: 'Eau', kind: 'volume', unit: 'L', step: 0.25, goal: 1.5, icon: 'glass', color: categoryColors.work, source: null, alarms: [] },
+  { label: 'E-liquide', name: 'E-liquide', kind: 'volume', unit: 'ml', step: 0.5, goal: null, icon: 'drop', color: categoryColors.work, source: null, alarms: [] },
+  { label: 'Cafés', name: 'Cafés', kind: 'quantity', unit: 'cafés', step: 1, goal: null, icon: 'coffee', color: categoryColors.friends, source: null, alarms: [] },
 ];
 
 
@@ -98,7 +98,8 @@ export function TrackerForm({ title, initial, isNew, onSave, onDelete }: Props) 
   const [customUnit, setCustomUnit] = useState(initial.kind === 'quantity' && !UNITS.quantity.some((u) => u.value === initial.unit));
   const [showErrors, setShowErrors] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [pickingTime, setPickingTime] = useState(false);
+  // Alarme dont on choisit l'heure (rang dans la liste), sinon null.
+  const [pickingTime, setPickingTime] = useState<number | null>(null);
   const set = (patch: Partial<TrackerDraft>) => setD((c) => ({ ...c, ...patch }));
   const color = d.color ?? GOAL_COLORS[0];
 
@@ -115,7 +116,7 @@ export function TrackerForm({ title, initial, isNew, onSave, onDelete }: Props) 
     setStepText('');
   };
   const applyTemplate = (tpl: TrackerDraft) => {
-    setD({ ...tpl, alarm: d.alarm });
+    setD({ ...tpl, alarms: d.alarms });
     setStepText('');
     setGoalText(goalToText(tpl));
     setCustomUnit(false);
@@ -156,8 +157,8 @@ export function TrackerForm({ title, initial, isNew, onSave, onDelete }: Props) 
         );
         return;
       }
-      // Alarme d'un suivi relié : Health Connect est relu au moment de sonner, app fermée (accès en arrière-plan).
-      if (draft.alarm && draft.source === 'health' && !initial.alarm) await requestHealthBackgroundAccess();
+      // Alarmes d'un suivi relié : Health Connect est relu au moment de sonner, app fermée (accès en arrière-plan).
+      if (draft.alarms.length && draft.source === 'health' && !initial.alarms.length) await requestHealthBackgroundAccess();
       setSaving(true);
       try {
         await onSave(draft);
@@ -368,10 +369,10 @@ export function TrackerForm({ title, initial, isNew, onSave, onDelete }: Props) 
           </Animated.View>
 
           <Animated.View entering={FadeInDown.delay(100).duration(260)}>
-            <AlarmField
-              value={d.alarm}
-              onChange={(alarm) => set({ alarm })}
-              onPickTime={() => setPickingTime(true)}
+            <AlarmsField
+              value={d.alarms}
+              onChange={(alarms) => set({ alarms })}
+              onPickTime={setPickingTime}
               hint={alarmHint(d)}
             />
           </Animated.View>
@@ -401,8 +402,13 @@ export function TrackerForm({ title, initial, isNew, onSave, onDelete }: Props) 
           )}
         </ScrollView>
       </KeyboardAvoidingView>
-      {pickingTime && d.alarm && (
-        <AlarmTimeSheet value={d.alarm.time} onDone={(time) => set({ alarm: { ...d.alarm!, time } })} onClose={() => setPickingTime(false)} />
+      {pickingTime !== null && d.alarms[pickingTime] && (
+        <AlarmTimeSheet
+          key={pickingTime}
+          value={d.alarms[pickingTime].time}
+          onDone={(time) => set({ alarms: d.alarms.map((a, i) => (i === pickingTime ? { ...a, time } : a)) })}
+          onClose={() => setPickingTime(null)}
+        />
       )}
     </SafeAreaView>
   );

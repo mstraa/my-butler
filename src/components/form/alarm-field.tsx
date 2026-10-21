@@ -6,68 +6,110 @@ import Animated, { FadeIn, LinearTransition } from 'react-native-reanimated';
 import { AppText } from '@/components/app-text';
 import { PickerField, SwitchRow } from '@/components/form/fields';
 import { HOURS, MINUTES, pad, TimeGrid } from '@/components/form/time-grid';
+import { Icon } from '@/components/icon';
 import { Sheet } from '@/components/sheet';
-import { ALL_DAYS, alarmDaysLabel, type DailyAlarm, WEEKDAY_LETTERS } from '@/lib/alarm';
+import { ALL_DAYS, alarmsLabel, type DailyAlarm, WEEKDAY_LETTERS } from '@/lib/alarm';
 import { colors, fonts } from '@/theme/tokens';
 
 const DEFAULT: DailyAlarm = { time: '20:00', days: ALL_DAYS };
+/** Assez pour un matin, un midi, un soir… sans remplir la limite d'alarmes d'Android. */
+const MAX_ALARMS = 6;
+const DAY_NAMES = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
+
+/** Une heure après `time` (nouvelle alarme ajoutée sous la précédente). */
+const hourAfter = (time: string) => `${pad((Number(time.slice(0, 2)) + 1) % 24)}${time.slice(2)}`;
 
 /**
- * Alarme quotidienne d'un objectif ou d'un suivi : interrupteur, heure, jours de la semaine.
- * `hint` : quand l'alarme se tait (déjà atteint, déjà noté…). `onPickTime` ouvre AlarmTimeSheet,
- * posée à la racine du formulaire (une feuille « inline » couvre son parent).
+ * Alarmes quotidiennes d'un objectif ou d'un suivi : interrupteur, puis une ligne par alarme (heure, jours)
+ * et « Ajouter une alarme ». `hint` : quand elles se taisent (déjà atteint, déjà noté…).
+ * `onPickTime(i)` ouvre AlarmTimeSheet pour l'alarme i, posée à la racine du formulaire (une feuille « inline » couvre son parent).
  */
-export function AlarmField({
+export function AlarmsField({
   value, onChange, onPickTime, hint,
 }: {
-  value: DailyAlarm | null;
-  onChange: (a: DailyAlarm | null) => void;
-  onPickTime: () => void;
+  value: DailyAlarm[];
+  onChange: (a: DailyAlarm[]) => void;
+  onPickTime: (index: number) => void;
   hint: string;
 }) {
-  const toggleDay = (i: number) => {
-    if (!value) return;
-    const days = value.days ^ (1 << i);
-    if (!days) return; // au moins un jour : sinon, couper l'alarme
+  const update = (i: number, a: DailyAlarm) => onChange(value.map((x, j) => (j === i ? a : x)));
+  const toggleDay = (i: number, day: number) => {
+    const days = value[i].days ^ (1 << day);
+    if (!days) return; // au moins un jour : sinon, retirer l'alarme
     Haptics.selectionAsync();
-    onChange({ ...value, days });
+    update(i, { ...value[i], days });
+  };
+  const remove = (i: number) => {
+    Haptics.selectionAsync();
+    onChange(value.filter((_, j) => j !== i));
+  };
+  const add = () => {
+    const last = value[value.length - 1];
+    onChange([...value, last ? { time: hourAfter(last.time), days: last.days } : DEFAULT]);
+    onPickTime(value.length);
   };
 
   return (
     <Animated.View layout={LinearTransition.duration(250)} style={styles.card}>
       <SwitchRow
         icon="alarm"
-        label="Alarme"
-        sub={value ? `${value.time} · ${alarmDaysLabel(value.days)}` : 'Sonnerie et plein écran, comme un réveil'}
-        value={!!value}
-        onChange={(on) => onChange(on ? DEFAULT : null)}
+        label={value.length > 1 ? 'Alarmes' : 'Alarme'}
+        sub={value.length ? alarmsLabel(value) : 'Sonnerie et plein écran, comme un réveil'}
+        value={value.length > 0}
+        onChange={(on) => onChange(on ? [DEFAULT] : [])}
       />
-      {value && (
+      {value.length > 0 && (
         <Animated.View entering={FadeIn.duration(200)} style={{ gap: 12 }}>
-          <View style={{ flexDirection: 'row', gap: 10, alignItems: 'flex-end' }}>
-            <PickerField label="Heure" numeric flex={0.8} value={value.time} onPress={onPickTime} />
-            <View style={{ flex: 2, gap: 6 }}>
-              <AppText style={styles.label}>Jours</AppText>
-              <View style={styles.days}>
-                {WEEKDAY_LETTERS.map((l, i) => {
-                  const on = (value.days & (1 << i)) !== 0;
-                  return (
-                    <Pressable
-                      key={i}
-                      onPress={() => toggleDay(i)}
-                      accessibilityRole="checkbox"
-                      accessibilityState={{ checked: on }}
-                      accessibilityLabel={['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'][i]}
-                      style={[styles.day, on && styles.dayOn]}>
-                      <AppText style={{ fontFamily: fonts.bodySemiBold, fontSize: 13 }} color={on ? colors.onLight : colors.textTertiary}>
-                        {l}
-                      </AppText>
-                    </Pressable>
-                  );
-                })}
+          {value.map((a, i) => (
+            <Animated.View
+              key={i}
+              entering={FadeIn.duration(200)}
+              layout={LinearTransition.duration(250)}
+              style={[{ flexDirection: 'row', gap: 10, alignItems: 'flex-end' }, i > 0 && styles.next]}>
+              <PickerField label="Heure" numeric flex={0.8} value={a.time} onPress={() => onPickTime(i)} />
+              <View style={{ flex: 2, gap: 6 }}>
+                <View style={styles.daysHead}>
+                  <AppText style={styles.label}>Jours</AppText>
+                  <Pressable
+                    onPress={() => remove(i)}
+                    hitSlop={10}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Retirer l'alarme de ${a.time}`}>
+                    <Icon name="x" size={15} color={colors.textTertiary} strokeWidth={2} />
+                  </Pressable>
+                </View>
+                <View style={styles.days}>
+                  {WEEKDAY_LETTERS.map((l, day) => {
+                    const on = (a.days & (1 << day)) !== 0;
+                    return (
+                      <Pressable
+                        key={day}
+                        onPress={() => toggleDay(i, day)}
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: on }}
+                        accessibilityLabel={`${DAY_NAMES[day]}, alarme de ${a.time}`}
+                        style={[styles.day, on && styles.dayOn]}>
+                        <AppText style={{ fontFamily: fonts.bodySemiBold, fontSize: 13 }} color={on ? colors.onLight : colors.textTertiary}>
+                          {l}
+                        </AppText>
+                      </Pressable>
+                    );
+                  })}
+                </View>
               </View>
-            </View>
-          </View>
+            </Animated.View>
+          ))}
+          {value.length < MAX_ALARMS && (
+            <Pressable
+              onPress={add}
+              accessibilityRole="button"
+              style={({ pressed }) => [styles.add, pressed && { borderColor: colors.textSecondary }]}>
+              <Icon name="plus" size={16} color={colors.textSecondary} strokeWidth={2} />
+              <AppText variant="label" color={colors.textSecondary}>
+                Ajouter une alarme
+              </AppText>
+            </Pressable>
+          )}
           <AppText variant="caption" style={{ lineHeight: 17 }}>
             {hint}
           </AppText>
@@ -128,7 +170,20 @@ const styles = StyleSheet.create({
     borderRadius: 22,
   },
   label: { fontFamily: fonts.bodySemiBold, fontSize: 12, color: colors.textTertiary },
+  daysHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   days: { flexDirection: 'row', justifyContent: 'space-between', gap: 4 },
+  next: { paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.borderSoft },
+  add: {
+    height: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: colors.borderDashed,
+  },
   day: {
     flex: 1,
     height: 48,

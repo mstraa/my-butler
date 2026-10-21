@@ -74,10 +74,11 @@ export async function seedTestData(db: SQLiteDatabase) {
         const end = r() < 0.6 ? `${day}T${hh(Math.min(23, h + between(1, 2)), 0)}` : null;
         const cancelled = r() < 0.07;
         await db.runAsync(
-          `INSERT INTO events (title, starts_at, ends_at, category_id, location, reminder_min,
+          `INSERT INTO events (title, starts_at, ends_at, category_id, location, reminders,
              cancelled_at, cancel_reason, cancel_mode, created_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          title, start, end, cat(catKey), location ?? null, pick([null, 15, 60]),
+          title, start, end, cat(catKey), location ?? null,
+          pick(['[]', '[{"min":15,"kind":"notif"}]', '[{"min":60,"kind":"notif"},{"min":15,"kind":"alarm"}]']),
           cancelled ? created : null, cancelled ? pick(['Empêchement', 'Malade', "Annulé par l'autre"]) : null,
           cancelled ? 'keep' : null, created,
         );

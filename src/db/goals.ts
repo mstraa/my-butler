@@ -3,7 +3,8 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import type { IconName } from '@/components/icon';
 import { GOAL_COLORS } from '@/db/agenda';
-import { alarmOf, type DailyAlarm } from '@/lib/alarm';
+import { getVacation } from '@/db/vacation';
+import { alarmsJson, alarmsOf, type DailyAlarm } from '@/lib/alarm';
 import { type DayKey, dayKey, parseDay, shiftDay, shiftMonth, todayKey, weekDays } from '@/lib/dates';
 import { type GoalRepeat, isActiveOn, nextActive, repeatOf } from '@/lib/goal-repeat';
 
@@ -19,10 +20,12 @@ export type GoalDraft = {
   unit: string;
   color: string | null;
   icon: IconName;
-  /** Alarme quotidienne (heure, jours) ; ne sonne pas si la période est déjà atteinte. */
-  alarm: DailyAlarm | null;
+  /** Alarmes quotidiennes (chacune son heure, ses jours) ; ne sonnent pas si la période est déjà atteinte. */
+  alarms: DailyAlarm[];
   /** Période personnalisée : certains jours, une période sur N. */
   repeat: GoalRepeat;
+  /** Lié à la maison (« Sortir la poubelle ») : au repos, sans alarme, pendant le mode vacances. */
+  home: boolean;
 };
 
 export type GoalProgress = GoalDraft & {
@@ -44,6 +47,8 @@ export type GoalProgress = GoalDraft & {
   chronoSince: number | null;
   /** Période en cours hors rythme (repos) : rien à faire. */
   off: boolean;
+  /** Au repos à cause du mode vacances (objectif lié à la maison). */
+  vacation: boolean;
   /** Début de la prochaine période active après la période en cours. */
   next: DayKey | null;
 };
@@ -70,8 +75,9 @@ export const isDone = (kind: GoalKind, target: number, value: number) => value >
 type GoalRow = {
   id: number; key: string | null; title: string; period: GoalPeriod; kind: GoalKind; target: number | null;
   unit: string | null; color: string | null; icon: string | null; sort: number;
-  alarm_time: string | null; alarm_days: number | null;
+  alarms: string | null;
   repeat_every: number | null; repeat_days: number | null; repeat_from: string | null; created_at: string | null;
+  home: number;
 };
 
 const repeatOfRow = (g: GoalRow) => repeatOf(g.repeat_every, g.repeat_days, g.repeat_from, g.created_at ?? todayKey());
@@ -80,9 +86,10 @@ const DEFAULT_ICON: Record<GoalKind, IconName> = { counter: 'target', value: 'ta
 
 /** Objectifs actifs avec leur avancement dans la période en cours. */
 export async function listGoals(db: SQLiteDatabase, today: DayKey = todayKey()): Promise<GoalProgress[]> {
-  const [goals, chronos] = await Promise.all([
+  const [goals, chronos, vacances] = await Promise.all([
     db.getAllAsync<GoalRow>('SELECT * FROM goals WHERE active = 1 ORDER BY sort, id'),
     db.getAllAsync<{ key: string; value: string }>("SELECT key, value FROM settings WHERE key LIKE 'chrono:%'"),
+    getVacation(db),
   ]);
   // Assez d'historique pour les séries : un an de jours, un an de semaines, deux ans de mois.
   const from = shiftMonth(periodRange('month', today)[0], -24);
@@ -108,6 +115,10 @@ export async function listGoals(db: SQLiteDatabase, today: DayKey = todayKey()):
     const max = g.period === 'day' ? 400 : g.period === 'week' ? 60 : 24;
     const actives: number[] = [];
     for (let k = 0; k <= max; k++) if (isActiveOn(g.period, repeat, periodStartBack(g.period, today, k))) actives.push(k);
+    // Mode vacances : la période en cours d'un objectif lié à la maison est un repos comme un autre.
+    // (Sans dates de vacances, les périodes passées comptent toujours.)
+    const vacation = vacances && !!g.home && actives[0] === 0;
+    if (vacation) actives.shift();
     const off = actives[0] !== 0;
     // La période en cours compte si elle est atteinte ; sinon la série part de la précédente.
     let streak = 0;
@@ -130,8 +141,9 @@ export async function listGoals(db: SQLiteDatabase, today: DayKey = todayKey()):
       unit: g.unit ?? '',
       color: g.color ?? GOAL_COLORS[i % GOAL_COLORS.length],
       icon: (g.icon as IconName) || DEFAULT_ICON[g.kind],
-      alarm: alarmOf(g.alarm_time, g.alarm_days),
+      alarms: alarmsOf(g.alarms),
       repeat,
+      home: !!g.home,
       value,
       today: byDay.get(today) ?? 0,
       answered: byDay.has(today),
@@ -140,6 +152,7 @@ export async function listGoals(db: SQLiteDatabase, today: DayKey = todayKey()):
       history,
       chronoSince: chrono ? Number(chrono.value) : null,
       off,
+      vacation,
       next: nextActive(g.period, repeat, periodStartBack(g.period, today, -1))[0] ?? null,
     };
   });
@@ -205,23 +218,23 @@ export async function getGoal(db: SQLiteDatabase, id: number): Promise<(GoalDraf
   if (!g) return null;
   return {
     id: g.id, title: g.title, period: g.period, kind: g.kind, target: g.target ?? 1, unit: g.unit ?? '',
-    color: g.color, icon: (g.icon as IconName) || DEFAULT_ICON[g.kind], alarm: alarmOf(g.alarm_time, g.alarm_days),
-    repeat: repeatOfRow(g),
+    color: g.color, icon: (g.icon as IconName) || DEFAULT_ICON[g.kind], alarms: alarmsOf(g.alarms),
+    repeat: repeatOfRow(g), home: !!g.home,
   };
 }
 
 const cols = (d: GoalDraft) => [
   d.title.trim(), d.period, d.kind, d.kind === 'bool' ? 1 : d.target, d.unit.trim() || null, d.color, d.icon,
-  d.alarm?.time ?? null, d.alarm?.days ?? 127,
+  alarmsJson(d.alarms),
   // Le rythme ne vaut que pour son unité : les jours de la semaine, seulement pour un objectif du jour.
-  d.repeat.every, d.period === 'day' ? d.repeat.days : 127, d.repeat.from,
+  d.repeat.every, d.period === 'day' ? d.repeat.days : 127, d.repeat.from, d.home ? 1 : 0,
 ];
 
 export async function createGoal(db: SQLiteDatabase, d: GoalDraft) {
   const max = await db.getFirstAsync<{ m: number | null }>('SELECT MAX(sort) AS m FROM goals');
   await db.runAsync(
-    `INSERT INTO goals (title, period, kind, target, unit, color, icon, alarm_time, alarm_days,
-       repeat_every, repeat_days, repeat_from, sort, created_at)
+    `INSERT INTO goals (title, period, kind, target, unit, color, icon, alarms,
+       repeat_every, repeat_days, repeat_from, home, sort, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ...cols(d), (max?.m ?? 0) + 1, todayKey(),
   );
@@ -229,8 +242,8 @@ export async function createGoal(db: SQLiteDatabase, d: GoalDraft) {
 
 export async function updateGoal(db: SQLiteDatabase, id: number, d: GoalDraft) {
   await db.runAsync(
-    `UPDATE goals SET title = ?, period = ?, kind = ?, target = ?, unit = ?, color = ?, icon = ?, alarm_time = ?, alarm_days = ?,
-       repeat_every = ?, repeat_days = ?, repeat_from = ?
+    `UPDATE goals SET title = ?, period = ?, kind = ?, target = ?, unit = ?, color = ?, icon = ?, alarms = ?,
+       repeat_every = ?, repeat_days = ?, repeat_from = ?, home = ?
       WHERE id = ?`,
     ...cols(d), id,
   );
@@ -298,6 +311,8 @@ export async function getGoalHistory(db: SQLiteDatabase, id: number, today: DayK
     const [start, end] = periodRange(g.period, periodStartBack(g.period, today, k));
     if (end < since) break;
     if (!isActiveOn(g.period, g.repeat, start)) continue;
+    // Période en cours au repos du mode vacances : absente, comme un repos.
+    if (k === 0 && g.vacation) continue;
     const value = entries.filter((e) => e.day >= start && e.day <= end).reduce((sum, e) => sum + e.value, 0);
     periods.push({ start, end, value, met: isDone(g.kind, g.target, value), current: k === 0 });
   }

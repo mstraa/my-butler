@@ -2,7 +2,7 @@ import { differenceInMinutes, format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
 import { RECURRENCES, REMINDERS } from '@/lib/event-options';
-import type { Category, EventRecord } from '@/db/events';
+import type { Category, EventRecord, EventReminder } from '@/db/events';
 import { dayOf, parseDay, parseStamp, shiftDay, type Stamp, timeOf, todayKey } from '@/lib/dates';
 import { colors } from '@/theme/tokens';
 
@@ -42,6 +42,21 @@ export function timeRange(e: EventRecord, start: Stamp, end: Stamp | null) {
 
 export const reminderLabel = (min: number | null) =>
   min === null ? null : REMINDERS.find((r) => r.value === min)?.label ?? `${min} min avant`;
+
+/**
+ * Ligne « Rappels » de l'aperçu : « 15 min avant », « 1 jour avant, 15 min avant ».
+ * Alarmes et notifications mêlées : les alarmes sont marquées (« 15 min avant (alarme) »).
+ */
+export function remindersInfo(list: EventReminder[]) {
+  const alarms = list.filter((r) => r.kind === 'alarm').length;
+  const mixed = alarms > 0 && alarms < list.length;
+  const many = list.length > 1;
+  return {
+    icon: alarms ? ('alarm' as const) : ('bell' as const),
+    label: alarms && !mixed ? (many ? 'Alarmes' : 'Alarme') : many ? 'Rappels' : 'Rappel',
+    value: list.length ? list.map((r) => `${reminderLabel(r.min)}${mixed && r.kind === 'alarm' ? ' (alarme)' : ''}`).join(', ') : null,
+  };
+}
 export const recurrenceLabel = (r: EventRecord['recurrence']) =>
   r === 'none' ? null : RECURRENCES.find((x) => x.value === r)?.label ?? null;
 
